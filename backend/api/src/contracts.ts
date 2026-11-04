@@ -322,7 +322,12 @@ export const mortgageProjectionSchema = z.object({
   paymentsRemaining: z.number().int().nonnegative(),
   totalInterest: money,
   /** Same terms without any prepayments, to show their effect. */
-  baseline: z.object({ payoffDate: z.iso.date(), totalInterest: money }),
+  baseline: z.object({
+    payoffDate: z.iso.date(),
+    totalInterest: money,
+    /** Year-end balances without prepayments (empty from servers older than 0.9.0). */
+    years: z.array(z.object({ year: z.number().int(), endingBalance: money })).default([]),
+  }),
   interestSaved: money,
   years: z.array(
     z.object({

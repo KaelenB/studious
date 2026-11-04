@@ -7,7 +7,7 @@ environment settings, or credentials.
 
 ## Use in this repository
 
-Both backend and frontend depend on `@studious/api` at version `0.8.0`. npm
+Both backend and frontend depend on `@studious/api` at version `0.9.0`. npm
 workspaces link the package locally during `npm ci`; nothing is published or
 downloaded from a private registry.
 
@@ -103,7 +103,7 @@ npm pack --workspace @studious/api --pack-destination .
 ```
 
 The `prepack` hook builds JavaScript and `.d.ts` declarations. The resulting
-`studious-api-0.8.0.tgz` can be installed into a separate frontend project with
+`studious-api-0.9.0.tgz` can be installed into a separate frontend project with
 `npm install <path-to-tarball>`. Only compiled distribution files, package metadata,
 and this guide are included. `zod` is the sole runtime dependency. No registry
 publish step is performed by this project.

@@ -17,7 +17,9 @@ filesystem router are not needed yet.
 - Set up mortgage terms (rate, compounding, amortization, term, payment
   frequency including accelerated, optional lender payment and property value)
   and see the payment, balance today, equity, next payment split, renewal,
-  mortgage-free date, lifetime interest, a balance chart, and a yearly schedule.
+  mortgage-free date, lifetime interest, an interactive chart (balance, balance without prepayments, equity,
+  property value, cumulative principal and interest; toggle lines in the legend and read year-end
+  values by hovering, tapping or using the arrow keys), and a yearly schedule.
 - Add or remove mortgage prepayments to see the interest they save, and record
   the projected mortgage balance as a snapshot with one click.
 - View latest balances and recorded asset/debt/net-worth totals per currency.

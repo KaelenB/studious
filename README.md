@@ -239,7 +239,7 @@ and CI above are planned.
 - **Decision:** interest compounds **semi-annually by default** (Canadian convention for fixed-rate mortgages). Compounding frequency is a per-mortgage setting.
 - Outputs: amortization schedule, interest vs. principal over time, remaining balance, equity, term-renewal date, and the effect of prepayments.
 - Mortgage payments are placed on the calendar automatically _(planned)_.
-- **Status:** terms, prepayments, and the amortization projection (payment, balance today, equity, next payment, renewal date and balance, payoff date, lifetime interest, interest saved by prepaying, yearly schedule, and a balance chart) are implemented. A lender's actual payment can override the calculated one, and the projected balance can be recorded as a balance snapshot.
+- **Status:** terms, prepayments, and the amortization projection (payment, balance today, equity, next payment, renewal date and balance, payoff date, lifetime interest, interest saved by prepaying, yearly schedule, and an interactive chart of balance, balance without prepayments, equity, property value, cumulative principal and cumulative interest with toggleable lines and per-year values on hover, tap or arrow keys) are implemented. A lender's actual payment can override the calculated one, and the projected balance can be recorded as a balance snapshot.
 
 ### 3.7 Calendar
 

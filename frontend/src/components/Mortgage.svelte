@@ -22,6 +22,7 @@
     type MortgageTermsInput,
   } from '../lib/api';
   import { cents, formatMoney, localDateTime } from '../lib/money';
+  import MortgageChart from './MortgageChart.svelte';
   import MortgageTermsForm from './MortgageTermsForm.svelte';
 
   let {
@@ -77,36 +78,6 @@
   const terms = $derived(mortgage?.terms ?? null);
   const projection = $derived(mortgage?.projection ?? null);
   const prepayments = $derived(mortgage?.prepayments ?? []);
-
-  /** Year-end balance (and equity when a property value is known) as SVG paths. */
-  const chart = $derived.by(() => {
-    if (!terms || !projection) return null;
-    const points = [
-      { year: Number(terms.startDate.slice(0, 4)), balance: Number(terms.principal) },
-      ...projection.years.map((year) => ({
-        year: year.year,
-        balance: Number(year.endingBalance),
-      })),
-    ];
-    const width = 600;
-    const height = 160;
-    const top = Math.max(Number(terms.principal), Number(terms.propertyValue ?? 0));
-    const span = Math.max(1, points.length - 1);
-    const x = (index: number) => (index / span) * width;
-    const y = (value: number) => height - (value / top) * height;
-    const line = points.map((point, index) => `${x(index)},${y(point.balance)}`).join(' L');
-    const currentYear = Number(projection.asOf.slice(0, 4));
-    const todayIndex = points.findIndex((point) => point.year >= currentYear);
-    return {
-      width,
-      height,
-      area: `M0,${height} L${line} L${width},${height} Z`,
-      property: terms.propertyValue ? y(Number(terms.propertyValue)) : null,
-      today: todayIndex < 0 ? null : x(todayIndex),
-      first: points[0]!.year,
-      last: points.at(-1)!.year,
-    };
-  });
 
   async function saveTerms(input: MortgageTermsInput) {
     mortgage = await api.saveMortgageTerms(account.householdId, account.id, input);
@@ -274,40 +245,7 @@
         </div>
       {/if}
     </div>
-    {#if chart}
-      <figure class="mortgage-chart">
-        <svg
-          viewBox={`0 0 ${chart.width} ${chart.height}`}
-          preserveAspectRatio="none"
-          role="img"
-          aria-label={`Balance declines from ${money(terms.principal)} in ${chart.first} to zero in ${chart.last}`}
-        >
-          <path d={chart.area} class="balance-area" />
-          {#if chart.property !== null}<line
-              x1="0"
-              x2={chart.width}
-              y1={chart.property}
-              y2={chart.property}
-              class="property-line"
-            />{/if}
-          {#if chart.today !== null}<line
-              x1={chart.today}
-              x2={chart.today}
-              y1="0"
-              y2={chart.height}
-              class="today-line"
-            />{/if}
-        </svg>
-        <figcaption class="muted small">
-          <span>{chart.first}</span>
-          <span
-            >Year-end balance{chart.property !== null ? '; dashed line is property value' : ''}; the
-            marker is this year</span
-          >
-          <span>{chart.last}</span>
-        </figcaption>
-      </figure>
-    {/if}
+    <MortgageChart {terms} {projection} currency={account.currency} />
 
     <h4 class="mortgage-subheading">Prepayments</h4>
     <p class="muted small">

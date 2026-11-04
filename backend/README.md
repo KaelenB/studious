@@ -256,7 +256,7 @@ The projection is computed on every read by the pure
 regular and calculated payment, balance and equity as of `asOf` (default: today,
 UTC), interest/principal/prepayments to date, the next payment split, renewal
 date and balance, payoff date, payments remaining, lifetime interest, a
-no-prepayment baseline with `interestSaved`, and calendar-year totals. Terms
+no-prepayment baseline (payoff date, total interest and year-end balances) with `interestSaved`, and calendar-year totals. Terms
 whose payment never repays the loan (or takes over 100 years) return `400`.
 Prepayments must be dated on or after `startDate`, and moving `startDate` after
 an existing prepayment returns `409`. Prepayments are hard-deleted planning

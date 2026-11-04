@@ -21,7 +21,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@studious/api": "0.8.0",
+    "@studious/api": "0.9.0",
     "@sveltestrap/sveltestrap": "7.1.0",
     "bootstrap": "5.3.8"
   },

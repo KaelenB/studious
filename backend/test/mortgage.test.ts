@@ -80,7 +80,15 @@ describe('mortgage amortization', () => {
     expect(prepaid.baseline).toEqual({
       payoffDate: regular.payoffDate,
       totalInterest: regular.totalInterest,
+      years: regular.years.map(({ year, endingBalance }) => ({ year, endingBalance })),
     });
+    const balanceIn = (year: number) =>
+      cents(prepaid.years.find((entry) => entry.year === year)!.endingBalance);
+    const baselineIn = (year: number) =>
+      cents(prepaid.baseline.years.find((entry) => entry.year === year)!.endingBalance);
+    // The gap compounds at the mortgage rate after the lump sum.
+    expect(baselineIn(2024) - balanceIn(2024)).toBeGreaterThan(2_000_000);
+    expect(baselineIn(2024) - balanceIn(2024)).toBeLessThan(2_100_000);
     expect(prepaid.years.find((year) => year.year === 2024)?.prepaid).toBe('20000.00');
   });
 

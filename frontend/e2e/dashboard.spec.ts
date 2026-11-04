@@ -435,7 +435,30 @@ test('sets up mortgage terms, projects amortization and tracks prepayments', asy
   await expect(mortgage.locator('.mortgage-stat').first()).toContainText('Monthly payment');
   await expect(mortgage.locator('.mortgage-stat').first()).toContainText('2,908.02');
   await expect(mortgage).toContainText('Home equity');
-  await expect(mortgage.getByRole('img', { name: /Balance declines/ })).toBeVisible();
+  const chart = mortgage.getByRole('slider', { name: /Mortgage projection by year/ });
+  await chart.focus();
+  await chart.press('Home');
+  const tooltip = mortgage.locator('.chart-tooltip');
+  await expect(tooltip).toContainText('Start (2024-01-15)');
+  await expect(tooltip).toContainText('Balance');
+  await expect(tooltip).toContainText('500,000.00');
+  await expect(tooltip).toContainText('Home equity');
+  await expect(tooltip).toContainText('300,000.00');
+  await chart.press('ArrowRight');
+  await expect(tooltip).toContainText('End of 2024');
+  await expect(chart).toHaveAttribute('aria-valuetext', /End of 2024: Balance CAD/);
+  await expect(mortgage.locator('.chart-dot')).toHaveCount(5);
+  await mortgage.getByRole('button', { name: 'Interest paid' }).click();
+  await expect(mortgage.getByRole('button', { name: 'Interest paid' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await chart.focus();
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).not.toContainText('Interest paid');
+  await chart.press('End');
+  await expect(tooltip).toContainText('End of 2049');
+  await expect(mortgage.getByRole('button', { name: 'Without prepayments' })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -446,6 +469,7 @@ test('sets up mortgage terms, projects amortization and tracks prepayments', asy
   await mortgage.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(mortgage.getByRole('cell', { name: 'Bonus' })).toBeVisible();
   await expect(mortgage).toContainText('Saved by prepaying');
+  await expect(mortgage.getByRole('button', { name: 'Without prepayments' })).toBeVisible();
   await mortgage.getByText('Yearly amortization schedule').click();
   await expect(mortgage.getByRole('cell', { name: '2024', exact: true })).toBeVisible();
 

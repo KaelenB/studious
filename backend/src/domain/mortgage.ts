@@ -178,6 +178,17 @@ function simulate(
 const sum = (rows: Row[], key: 'interest' | 'principal' | 'prepaid') =>
   rows.reduce((total, row) => total + row[key], 0);
 
+function byYear(rows: Row[]) {
+  const years = new Map<number, Row[]>();
+  for (const row of rows) {
+    const year = Number(row.date.slice(0, 4));
+    const yearRows = years.get(year) ?? [];
+    yearRows.push(row);
+    years.set(year, yearRows);
+  }
+  return years;
+}
+
 export function projectMortgage(
   terms: AmortizationTerms,
   prepayments: ScheduledPrepayment[],
@@ -210,13 +221,7 @@ export function projectMortgage(
   const totalInterest = sum(rows, 'interest');
   const baselineInterest = sum(baseline, 'interest');
 
-  const years = new Map<number, Row[]>();
-  for (const row of rows) {
-    const year = Number(row.date.slice(0, 4));
-    const yearRows = years.get(year) ?? [];
-    yearRows.push(row);
-    years.set(year, yearRows);
-  }
+  const years = byYear(rows);
 
   return {
     asOf,
@@ -242,7 +247,14 @@ export function projectMortgage(
     payoffDate: rows.at(-1)!.date,
     paymentsRemaining: balance > 0 ? rows.filter((row) => row.date > asOf).length : 0,
     totalInterest: fromCents(totalInterest),
-    baseline: { payoffDate: baseline.at(-1)!.date, totalInterest: fromCents(baselineInterest) },
+    baseline: {
+      payoffDate: baseline.at(-1)!.date,
+      totalInterest: fromCents(baselineInterest),
+      years: [...byYear(baseline)].map(([year, yearRows]) => ({
+        year,
+        endingBalance: fromCents(yearRows.at(-1)!.balance),
+      })),
+    },
     interestSaved: fromCents(baselineInterest - totalInterest),
     years: [...years].map(([year, yearRows]) => ({
       year,
