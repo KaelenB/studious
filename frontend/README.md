@@ -29,7 +29,7 @@ nonfunctional navigation.
 ## Run locally
 
 Select the pinned Node version using the root [nvm-windows instructions](../README.md#nodejs-with-nvm-windows).
-After `npm ci` from the root, run the PostgreSQL database and API following
+After `npm ci` from the root, run the API (which owns the central SQLite database) following
 the [backend guide](../backend/README.md), then:
 
 ```powershell
@@ -86,7 +86,7 @@ src/
     api.ts                      # Configures backend-distributed client; UI labels
     money.ts                    # Integer-cent aggregation and presentation
   app.css                       # Shared responsive design and focus states
-e2e/                            # Real PostgreSQL + API browser tests
+e2e/                            # Real in-memory SQLite + API browser tests
 ```
 
 ## UI components
@@ -133,7 +133,7 @@ unsupported PDFs instead of guessing. Check the account, currency and date befor
 confirming; a statement may contain an entire plan, not an individual fund.
 Statement dates map to end-of-day UTC for snapshot ordering. Older imports do
 not replace newer balances. Duplicate bytes cannot create duplicate snapshots
-for the same account. PDFs live in PostgreSQL and survive container restarts;
+for the same account. PDFs live in the central SQLite database and survive container restarts;
 no financial documents are stored in browser storage. Archived accounts retain
 their files, although browsing archived accounts is not yet a UI feature.
 
@@ -167,11 +167,11 @@ npm run test:e2e
 npm run format:check
 ```
 
-Browser tests need Docker. They start disposable PostgreSQL containers and a
-real API on `127.0.0.1:3101`, with a Vite preview on `127.0.0.1:4173`. These
+Browser tests need no Docker. They start a real API backed by a disposable
+in-memory SQLite database on `127.0.0.1:3101`, with a Vite preview on `127.0.0.1:4173`. These
 ports must be free; the test runner will not reuse another project's server.
 Desktop and mobile Chromium tests cover creation, persistence through reload,
 member assignment, balance recording, editing, archiving, and recoverable errors.
 They also cover expense category/member attribution, edits across month boundaries,
 per-currency totals, pagination, expense archiving, and failed-read recovery.
-No developer database is modified. Tests stop their processes and containers.
+No developer database is modified. Tests stop their processes when finished.

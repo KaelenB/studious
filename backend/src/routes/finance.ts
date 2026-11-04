@@ -9,6 +9,7 @@ export function registerFinanceRoutes(
   service: FinanceService,
 ) {
   app.get('/health', controller.health);
+  app.get('/storage', controller.storage);
   app.post('/households', controller.createHousehold);
   app.register(
     async (scoped) => {

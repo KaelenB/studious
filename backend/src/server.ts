@@ -1,16 +1,13 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
-import { createDatabase } from './db/client.js';
+import { openNodeDatabase } from './db/node.js';
 
 const config = loadConfig();
-const { db, pool } = createDatabase(config.DATABASE_URL);
-const app = buildApp(db, { level: config.LOG_LEVEL }, config.CORS_ORIGINS);
+const database = openNodeDatabase(config.DATABASE_PATH, config.DATABASE_MAX_BYTES);
+const app = buildApp(database, { level: config.LOG_LEVEL }, config.CORS_ORIGINS);
 
-pool.on('error', (error) => {
-  app.log.error({ err: error }, 'Unexpected PostgreSQL pool error');
-});
 app.addHook('onClose', async () => {
-  await pool.end();
+  await database.close();
 });
 
 async function shutdown() {
@@ -26,7 +23,7 @@ process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
 
 try {
-  await pool.query('select 1');
+  await database.migrate();
   await app.listen({ host: config.HOST, port: config.PORT });
 } catch (error) {
   app.log.fatal({ err: error }, 'Backend startup failed');

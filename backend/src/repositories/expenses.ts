@@ -1,7 +1,21 @@
 import { and, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
-import type { Database } from '../db/client.js';
+import type { Database } from '../db/database.js';
 import { expenseCategories, expenses } from '../models/schema.js';
 import type { ExpenseUpdate } from '@studious/api';
+
+function nextMonth(month: string) {
+  const [year, value] = month.split('-').map(Number) as [number, number];
+  return value === 12
+    ? `${String(year + 1).padStart(4, '0')}-01-01`
+    : `${String(year).padStart(4, '0')}-${String(value + 1).padStart(2, '0')}-01`;
+}
+
+/** Formats an integer number of cents as the API's two-place decimal string. */
+function centsToMoney(cents: bigint) {
+  const sign = cents < 0n ? '-' : '';
+  const absolute = (cents < 0n ? -cents : cents).toString().padStart(3, '0');
+  return `${sign}${absolute.slice(0, -2)}.${absolute.slice(-2)}`;
+}
 
 export function createExpenseRepository(db: Database) {
   const activeExpense = (householdId: string, expenseId: string) =>
@@ -15,7 +29,7 @@ export function createExpenseRepository(db: Database) {
       eq(expenses.householdId, householdId),
       isNull(expenses.deletedAt),
       gte(expenses.startDate, `${month}-01`),
-      lt(expenses.startDate, sql`(${`${month}-01`}::date + interval '1 month')::date`),
+      lt(expenses.startDate, nextMonth(month)),
     );
 
   return {
@@ -65,15 +79,22 @@ export function createExpenseRepository(db: Database) {
           const totals = await tx
             .select({
               currency: expenses.currency,
-              amount: sql<string>`sum(${expenses.amount})::text`,
+              // Amounts are canonical "123.45" strings, so removing the point yields exact cents.
+              cents: sql<string>`cast(sum(cast(replace(${expenses.amount}, '.', '') as integer)) as text)`,
             })
             .from(expenses)
             .where(inMonth(householdId, month))
             .groupBy(expenses.currency)
             .orderBy(expenses.currency);
-          return { items, totals };
+          return {
+            items,
+            totals: totals.map(({ currency, cents }) => ({
+              currency,
+              amount: centsToMoney(BigInt(cents)),
+            })),
+          };
         },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
+        { behavior: 'deferred' },
       );
     },
   };

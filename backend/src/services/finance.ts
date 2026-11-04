@@ -6,9 +6,13 @@ import type {
   NewMember,
 } from '../models/schema.js';
 import type { FinanceRepository } from '../repositories/finance.js';
+import type { Storage } from '@studious/api';
 import { ApplicationError } from './errors.js';
 
-export function createFinanceService(repository: FinanceRepository) {
+export function createFinanceService(
+  repository: FinanceRepository,
+  storage: () => Promise<Storage>,
+) {
   async function requireHousehold(householdId: string) {
     const household = await repository.findHousehold(householdId);
     if (!household) throw new ApplicationError('NOT_FOUND', 'Household not found');
@@ -25,6 +29,7 @@ export function createFinanceService(repository: FinanceRepository) {
     requireHousehold,
     requireAccount,
     checkConnection: () => repository.checkConnection(),
+    storage,
     createHousehold: (input: NewHousehold) => repository.createHousehold(input),
     listMembers: (householdId: string) => repository.listMembers(householdId),
     createMember: (householdId: string, input: NewMember) =>

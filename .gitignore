@@ -9,3 +9,8 @@ docs/sunlife/
 docs/questrade/
 .env.*
 !.env.example
+# Central SQLite database and backups (private financial data)
+backend/data/
+*.sqlite
+*.sqlite3
+*.sqlite-*

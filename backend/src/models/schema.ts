@@ -8,75 +8,81 @@ import {
 import {
   check,
   customType,
-  integer,
-  jsonb,
-  date,
   foreignKey,
   index,
-  numeric,
-  pgEnum,
-  pgTable,
-  timestamp,
+  integer,
+  sqliteTable,
+  text,
   unique,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+} from 'drizzle-orm/sqlite-core';
 
+const id = () =>
+  text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID());
+const instant = (name: string) => integer(name, { mode: 'timestamp_ms' });
 const timestamps = () => ({
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
+  createdAt: instant('created_at')
     .notNull()
-    .defaultNow()
+    .$defaultFn(() => new Date()),
+  updatedAt: instant('updated_at')
+    .notNull()
+    .$defaultFn(() => new Date())
     .$onUpdate(() => new Date()),
 });
+const currencyCheck = (name: string, column: unknown) =>
+  check(name, sql`${column} GLOB '[A-Z][A-Z][A-Z]'`);
+const inList = (values: readonly string[]) =>
+  sql.raw(values.map((value) => `'${value}'`).join(', '));
+/** Money is stored as the canonical two-place decimal string from the API contract. */
+const money = (name: string) => text(name).notNull();
+const moneyCheck = (name: string, column: unknown) =>
+  check(name, sql`${column} GLOB '*[0-9].[0-9][0-9]' AND length(${column}) <= 16`);
 
-export const accountType = pgEnum('account_type', accountTypes);
-export const balanceSource = pgEnum('balance_source', balanceSources);
-
-export const households = pgTable(
+export const households = sqliteTable(
   'households',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    name: varchar('name', { length: 200 }).notNull(),
-    defaultCurrency: varchar('default_currency', { length: 3 }).notNull().default('CAD'),
+    id: id(),
+    name: text('name').notNull(),
+    defaultCurrency: text('default_currency').notNull().default('CAD'),
     ...timestamps(),
   },
   (table) => [
-    check('households_name_not_blank', sql`length(trim(${table.name})) > 0`),
-    check('households_currency_format', sql`${table.defaultCurrency} ~ '^[A-Z]{3}$'`),
+    check('households_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
+    currencyCheck('households_currency_format', table.defaultCurrency),
   ],
 );
 
-export const members = pgTable(
+export const members = sqliteTable(
   'members',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id')
+    id: id(),
+    householdId: text('household_id')
       .notNull()
       .references(() => households.id),
-    name: varchar('name', { length: 200 }).notNull(),
+    name: text('name').notNull(),
     ...timestamps(),
   },
   (table) => [
     unique('members_household_id_id_unique').on(table.householdId, table.id),
-    check('members_name_not_blank', sql`length(trim(${table.name})) > 0`),
+    check('members_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
   ],
 );
 
-export const accounts = pgTable(
+export const accounts = sqliteTable(
   'accounts',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id')
+    id: id(),
+    householdId: text('household_id')
       .notNull()
       .references(() => households.id),
-    memberId: uuid('member_id'),
-    name: varchar('name', { length: 200 }).notNull(),
-    type: accountType('type').notNull(),
-    currency: varchar('currency', { length: 3 }).notNull().default('CAD'),
-    balanceSource: balanceSource('balance_source').notNull().default('MANUAL'),
+    memberId: text('member_id'),
+    name: text('name').notNull(),
+    type: text('type', { enum: accountTypes }).notNull(),
+    currency: text('currency').notNull().default('CAD'),
+    balanceSource: text('balance_source', { enum: balanceSources }).notNull().default('MANUAL'),
     ...timestamps(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedAt: instant('deleted_at'),
   },
   (table) => [
     unique('accounts_household_id_id_unique').on(table.householdId, table.id),
@@ -85,22 +91,27 @@ export const accounts = pgTable(
       columns: [table.householdId, table.memberId],
       foreignColumns: [members.householdId, members.id],
     }),
-    check('accounts_name_not_blank', sql`length(trim(${table.name})) > 0`),
-    check('accounts_currency_format', sql`${table.currency} ~ '^[A-Z]{3}$'`),
+    check('accounts_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
+    check('accounts_type_valid', sql`${table.type} IN (${inList(accountTypes)})`),
+    check(
+      'accounts_balance_source_valid',
+      sql`${table.balanceSource} IN (${inList(balanceSources)})`,
+    ),
+    currencyCheck('accounts_currency_format', table.currency),
   ],
 );
 
-export const balanceSnapshots = pgTable(
+export const balanceSnapshots = sqliteTable(
   'balance_snapshots',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id')
+    id: id(),
+    householdId: text('household_id')
       .notNull()
       .references(() => households.id),
-    accountId: uuid('account_id').notNull(),
-    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
-    asOf: timestamp('as_of', { withTimezone: true }).notNull(),
-    source: balanceSource('source').notNull().default('MANUAL'),
+    accountId: text('account_id').notNull(),
+    amount: money('amount'),
+    asOf: instant('as_of').notNull(),
+    source: text('source', { enum: balanceSources }).notNull().default('MANUAL'),
     ...timestamps(),
   },
   (table) => [
@@ -114,6 +125,8 @@ export const balanceSnapshots = pgTable(
       columns: [table.householdId, table.accountId],
       foreignColumns: [accounts.householdId, accounts.id],
     }),
+    moneyCheck('balance_snapshots_amount_format', table.amount),
+    check('balance_snapshots_source_valid', sql`${table.source} IN (${inList(balanceSources)})`),
     index('balance_snapshots_account_as_of_idx').on(table.householdId, table.accountId, table.asOf),
   ],
 );
@@ -130,38 +143,38 @@ export type NewAccount = Pick<Account, 'name' | 'type' | 'currency' | 'balanceSo
 export type AccountUpdate = Partial<Pick<Account, 'name' | 'memberId'>>;
 export type NewBalanceSnapshot = Pick<BalanceSnapshot, 'amount' | 'asOf'>;
 
-export const expenseCategories = pgTable(
+export const expenseCategories = sqliteTable(
   'expense_categories',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id')
+    id: id(),
+    householdId: text('household_id')
       .notNull()
       .references(() => households.id),
-    name: varchar('name', { length: 200 }).notNull(),
+    name: text('name').notNull(),
     ...timestamps(),
   },
   (table) => [
     unique('expense_categories_household_id_id_unique').on(table.householdId, table.id),
     unique('expense_categories_household_name_unique').on(table.householdId, table.name),
-    check('expense_categories_name_not_blank', sql`length(trim(${table.name})) > 0`),
+    check('expense_categories_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
   ],
 );
 
-export const expenses = pgTable(
+export const expenses = sqliteTable(
   'expenses',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id')
+    id: id(),
+    householdId: text('household_id')
       .notNull()
       .references(() => households.id),
-    memberId: uuid('member_id'),
-    categoryId: uuid('category_id'),
-    name: varchar('name', { length: 200 }).notNull(),
-    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
-    currency: varchar('currency', { length: 3 }).notNull().default('CAD'),
-    startDate: date('start_date', { mode: 'string' }).notNull(),
+    memberId: text('member_id'),
+    categoryId: text('category_id'),
+    name: text('name').notNull(),
+    amount: money('amount'),
+    currency: text('currency').notNull().default('CAD'),
+    startDate: text('start_date').notNull(),
     ...timestamps(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedAt: instant('deleted_at'),
   },
   (table) => [
     foreignKey({
@@ -174,9 +187,11 @@ export const expenses = pgTable(
       columns: [table.householdId, table.categoryId],
       foreignColumns: [expenseCategories.householdId, expenseCategories.id],
     }),
-    check('expenses_name_not_blank', sql`length(trim(${table.name})) > 0`),
-    check('expenses_amount_positive', sql`${table.amount} > 0`),
-    check('expenses_currency_format', sql`${table.currency} ~ '^[A-Z]{3}$'`),
+    check('expenses_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
+    moneyCheck('expenses_amount_format', table.amount),
+    check('expenses_amount_positive', sql`CAST(${table.amount} AS REAL) > 0`),
+    currencyCheck('expenses_currency_format', table.currency),
+    check('expenses_start_date_format', sql`date(${table.startDate}) IS ${table.startDate}`),
     index('expenses_household_date_idx').on(table.householdId, table.startDate, table.id),
   ],
 );
@@ -184,27 +199,32 @@ export const expenses = pgTable(
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType: () => 'bytea',
+// Portable blob column: Drizzle's buffer mode depends on Node's Buffer, which browsers lack.
+const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => 'blob',
+  fromDriver: (value) => (value instanceof Uint8Array ? value : new Uint8Array(value)),
 });
 
-export const statementArchives = pgTable(
+export const statementArchives = sqliteTable(
   'statement_archives',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id').notNull(),
-    accountId: uuid('account_id').notNull(),
-    snapshotId: uuid('snapshot_id').notNull(),
-    filename: varchar('filename', { length: 200 }).notNull(),
-    sha256: varchar('sha256', { length: 64 }).notNull(),
-    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
-    statementDate: date('statement_date', { mode: 'string' }).notNull(),
-    currency: varchar('currency', { length: 3 }).notNull(),
+    id: id(),
+    householdId: text('household_id').notNull(),
+    accountId: text('account_id').notNull(),
+    snapshotId: text('snapshot_id').notNull(),
+    filename: text('filename').notNull(),
+    sha256: text('sha256').notNull(),
+    amount: money('amount'),
+    statementDate: text('statement_date').notNull(),
+    currency: text('currency').notNull(),
     byteLength: integer('byte_length').notNull(),
-    pdf: bytea('pdf').notNull(),
-    investments: jsonb('investments').$type<StatementInvestment[]>(),
-    provider: varchar('provider', { length: 20 }).notNull().default('SUNLIFE'),
-    questrade: jsonb('questrade').$type<NonNullable<StatementPreview['questrade']>>(),
+    /** Original uploaded document (PDF or XLSX) despite the historical column name. */
+    pdf: bytes('pdf').notNull(),
+    investments: text('investments', { mode: 'json' }).$type<StatementInvestment[]>(),
+    provider: text('provider').notNull().default('SUNLIFE'),
+    questrade: text('questrade', { mode: 'json' }).$type<
+      NonNullable<StatementPreview['questrade']>
+    >(),
     ...timestamps(),
   },
   (table) => [
@@ -225,8 +245,10 @@ export const statementArchives = pgTable(
     unique('statement_archives_snapshot_unique').on(table.snapshotId),
     check(
       'statement_archives_size_valid',
-      sql`${table.byteLength} = octet_length(${table.pdf}) AND ${table.byteLength} > 0 AND ${table.byteLength} <= 10485760`,
+      sql`${table.byteLength} = length(${table.pdf}) AND ${table.byteLength} > 0 AND ${table.byteLength} <= 10485760`,
     ),
+    check('statement_archives_provider_valid', sql`${table.provider} IN ('SUNLIFE', 'QUESTRADE')`),
+    moneyCheck('statement_archives_amount_format', table.amount),
     index('statement_archives_account_created_idx').on(
       table.householdId,
       table.accountId,

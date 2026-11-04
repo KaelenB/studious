@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest';
-import { parseQuestradeXlsx } from '../src/services/questrade.js';
+import { parseQuestradeXlsx as parse } from '../src/services/questrade.js';
+import { nodeExtractors } from '../src/services/extractors.node.js';
 import { questradeXlsx } from './fixtures/questrade.js';
+
+const parseQuestradeXlsx = (bytes: Uint8Array, date: string | undefined) =>
+  parse(bytes, date, nodeExtractors);
 
 it('extracts combined equity, cash, FX and native-currency positions without losing decimals', async () => {
   const parsed = await parseQuestradeXlsx(questradeXlsx(), '2026-10-31');

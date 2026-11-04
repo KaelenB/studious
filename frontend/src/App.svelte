@@ -14,6 +14,7 @@
   import AccountForm from './components/AccountForm.svelte';
   import AccountDetail from './components/AccountDetail.svelte';
   import Expenses from './components/Expenses.svelte';
+  import StorageMeter from './components/StorageMeter.svelte';
   import {
     api,
     accountLabels,
@@ -422,10 +423,11 @@
             >
           </Form>
           {#if memberError}<Alert color="danger" fade={false}>{memberError}</Alert>{/if}
+          <StorageMeter {revision} />
         </Card>
         <footer>
           Built for a little more peace of mind. <span
-            >Manual data · Local-only · No authentication yet</span
+            >Manual data · Central SQLite · No authentication yet</span
           >
         </footer>
       {/if}

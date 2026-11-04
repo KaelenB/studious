@@ -1,13 +1,12 @@
-import { fileURLToPath } from 'node:url';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { loadConfig } from '../config.js';
-import { createDatabase } from './client.js';
+import { openNodeDatabase } from './node.js';
 
-const { db, pool } = createDatabase(loadConfig().DATABASE_URL);
+const config = loadConfig();
+const database = openNodeDatabase(config.DATABASE_PATH, config.DATABASE_MAX_BYTES);
 
 try {
-  await migrate(db, { migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)) });
+  await database.migrate();
   console.info('Database migrations completed.');
 } finally {
-  await pool.end();
+  await database.close();
 }

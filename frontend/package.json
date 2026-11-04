@@ -22,7 +22,6 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
-    "@testcontainers/postgresql": "12.2.1",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^24.19.2",
     "svelte": "^5.57.2",
@@ -32,7 +31,7 @@
     "vitest": "5.1.0"
   },
   "dependencies": {
-    "@studious/api": "0.5.0",
+    "@studious/api": "0.6.0",
     "@sveltestrap/sveltestrap": "7.1.0",
     "bootstrap": "5.3.8"
   }

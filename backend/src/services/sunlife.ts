@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import {
   moneyPattern,
@@ -8,10 +6,10 @@ import {
   statementInvestmentSchema,
   type StatementInvestment,
 } from '@studious/api';
+import { sha256Hex, startsWith, type DocumentExtractors } from './extractors.js';
 
-export class StatementError extends Error {
-  readonly statusCode = 422;
-}
+export { StatementError } from './extractors.js';
+import { StatementError } from './extractors.js';
 
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
@@ -159,88 +157,14 @@ export function parseSunLifeText(text: string) {
   };
 }
 
-const workerCode = `
-  const { PDFParse } = require('pdf-parse');
-  const chunks = [];
-  process.stdin.on('data', chunk => chunks.push(chunk));
-  process.stdin.on('end', async () => {
-    let parser;
-    try {
-      parser = new PDFParse({ data: new Uint8Array(Buffer.concat(chunks)), stopAtErrors: true, verbosity: 0 });
-      const result = await parser.getText({ first: 1, last: 25 });
-      if (result.total > 25 || result.text.length > 500000) throw new Error('Statement too large');
-      process.stdout.write(JSON.stringify({ text: result.text }));
-    } catch { process.exitCode = 1; }
-    finally { if (parser) await parser.destroy(); }
-  });
-`;
-
-let activeParsers = 0;
-export async function parseSunLifePdf(pdf: Buffer) {
+export async function parseSunLifePdf(pdf: Uint8Array, extractors: DocumentExtractors) {
   if (pdf.length > statementFileLimit)
     throw new StatementError('PDF exceeds the 10 MiB upload limit.');
-  if (!pdf.subarray(0, 5).equals(Buffer.from('%PDF-')))
+  if (!startsWith(pdf, [0x25, 0x50, 0x44, 0x46, 0x2d]))
     throw new StatementError('Upload a valid PDF file.');
-  if (activeParsers >= 2) throw new StatementError('The PDF parser is busy. Please retry shortly.');
-  activeParsers++;
-  try {
-    const text = await new Promise<string>((resolve, reject) => {
-      const child = spawn(
-        process.execPath,
-        ['--max-old-space-size=128', '--input-type=commonjs', '-e', workerCode],
-        {
-          stdio: ['pipe', 'pipe', 'ignore'],
-          windowsHide: true,
-        },
-      );
-      let settled = false;
-      let output = '';
-      let failure: Error | undefined;
-      const finish = (error?: Error, text?: string) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (error) reject(error);
-        else resolve(text!);
-      };
-      const timer = setTimeout(() => {
-        failure = new StatementError('PDF parsing timed out. Use a smaller text-based statement.');
-        child.kill();
-      }, 15000);
-      child.stdout.on('data', (data: Buffer) => {
-        output += data.toString('utf8');
-        if (output.length > 1000000) {
-          failure = new StatementError('PDF text exceeds the supported size.');
-          child.kill();
-        }
-      });
-      child.on('error', () => finish(new StatementError('The PDF parser could not be started.')));
-      child.stdin.on('error', () => {
-        failure = new StatementError('The PDF could not be sent to the parser.');
-      });
-      child.on('close', (code) => {
-        if (failure) return finish(failure);
-        const invalid = new StatementError(
-          'Cannot read this PDF. It may be encrypted, damaged, or longer than 25 pages.',
-        );
-        if (code !== 0) return finish(invalid);
-        let message: unknown;
-        try {
-          message = JSON.parse(output);
-        } catch {
-          return finish(invalid);
-        }
-        const parsed = z.object({ text: z.string().max(500000) }).safeParse(message);
-        if (!parsed.success) finish(invalid);
-        else finish(undefined, parsed.data.text);
-      });
-      child.stdin.end(pdf);
-    });
-    return statementPreviewSchema.parse({
-      ...parseSunLifeText(text),
-      sha256: createHash('sha256').update(pdf).digest('hex'),
-    });
-  } finally {
-    activeParsers--;
-  }
+  const text = await extractors.pdfText(pdf);
+  return statementPreviewSchema.parse({
+    ...parseSunLifeText(text),
+    sha256: await sha256Hex(pdf),
+  });
 }

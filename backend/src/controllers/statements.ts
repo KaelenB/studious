@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { accountParams, historyQuery, statementParams, statementQuery } from '@studious/api';
 import type { createStatementService } from '../services/statements.js';
-import { StatementError } from '../services/sunlife.js';
+import { StatementError } from '../services/extractors.js';
 import { statementView } from '../views/statements.js';
 
 export function createStatementController(service: ReturnType<typeof createStatementService>) {
@@ -14,7 +14,7 @@ export function createStatementController(service: ReturnType<typeof createState
     }
   }
   function upload(request: FastifyRequest) {
-    if (!Buffer.isBuffer(request.body))
+    if (!(request.body instanceof Uint8Array))
       throw new StatementError('Send a PDF or XLSX with its matching Content-Type.');
     return request.body;
   }

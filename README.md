@@ -26,7 +26,8 @@ A self-hosted web application that gives a household one clear, current view of 
 
 The [Svelte frontend](frontend/README.md), using Bootstrap 5 and Sveltestrap
 components compatible with Svelte 5, connects to the
-[backend](backend/README.md) using PostgreSQL, Drizzle ORM, Fastify, and Zod.
+[backend](backend/README.md) using a central SQLite database (1 GiB cap), Drizzle ORM,
+Fastify, and Zod.
 The implemented slice includes household setup, members, manual accounts,
 balance history, per-currency financial summaries, and categorized one-off expenses
 with monthly totals, editing, and archiving. Manual CAD investment accounts also
@@ -65,18 +66,18 @@ coordinate with any other running projects. Node.js 22.22+ is required.
 
 ### Local development
 
-Start the database, then the backend and frontend in separate terminals:
+Start the backend and frontend in separate terminals (the backend creates and
+migrates `backend\data\studious.sqlite` on first start; no database server needed):
 
 ```powershell
-docker compose --env-file backend\.env -f backend\compose.yaml up db -d --wait
-npm run db:migrate --workspace @studious/backend
+Copy-Item backend\.env.example backend\.env  # if it does not exist yet
 npm run dev:backend
 # In a second terminal:
 npm run dev:frontend
 # Open http://127.0.0.1:5173
 ```
 
-The migration and backend commands load `backend\.env` through the workspace.
+The backend command loads `backend\.env` through the workspace.
 See the [backend guide](backend/README.md) for migrations, API examples, and tests.
 See the [frontend guide](frontend/README.md) for UI structure and browser tests.
 The backend separates models, JSON views, controllers, services, repositories,
@@ -85,15 +86,17 @@ The API is local-only and does not implement authentication yet.
 
 ### Deploy the frontend to GitHub Pages
 
-GitHub Pages hosts only static files, so it serves the Svelte frontend; the
-API and PostgreSQL still run elsewhere. Because the API has **no authentication**,
-the recommended setup keeps it on your own machine and lets the Pages site call
-it over loopback — financial data never leaves your computer.
+GitHub Pages hosts only static files, so it serves the Svelte frontend. All data
+lives in **one central SQLite database** owned by the API container
+(`docker compose up`), which you host yourself; the Pages site calls that API.
+Every browser and device sees the same data.
 
 1. Push the repository to GitHub, then **Settings → Pages → Source: GitHub Actions**.
 2. **Settings → Secrets and variables → Actions → Variables**: add
-   `STUDIOUS_API_URL`, e.g. `http://127.0.0.1:3000` (local API) or an HTTPS URL
-   you control. The workflow refuses any other `http://` URL.
+   `STUDIOUS_API_URL`: the public HTTPS URL of your API (for example a
+   Cloudflare Tunnel or Tailscale Funnel hostname that forwards to
+   `127.0.0.1:3000`). `http://127.0.0.1:3000` also works when only this
+   computer uses the site. The workflow refuses any other `http://` URL.
 3. Allow the Pages origin on the API (exact origin, no path), e.g. in `backend\.env`
    or before `docker compose up`:
    `CORS_ORIGINS=https://<user>.github.io`
@@ -101,9 +104,12 @@ it over loopback — financial data never leaves your computer.
    runs the frontend tests, builds with the repository sub-path (`/<repo>/`, or `/`
    for `<user>.github.io`) and publishes `frontend/dist`.
 
-Browsers may ask permission the first time a public site connects to a local
-address (Chrome's local network access prompt); allow it for your Pages site.
-Exposing the API publicly is not recommended until authentication exists.
+The API has **no authentication** yet: protect the public URL with an access
+layer on the tunnel/proxy (e.g. Cloudflare Access) before putting financial data
+behind it. With a loopback URL, browsers may ask permission the first time the
+public site connects to a local address; allow it for your Pages site.
+Database size, the `507` storage-full response and backups are described in the
+[backend guide](backend/README.md#central-database-and-storage-cap).
 Household IDs are stored per origin, so note your household ID before switching
 from the local frontend to the Pages site.
 
@@ -114,7 +120,7 @@ from the local frontend to the Pages site.
 ```
 ┌──────────────┐     HTTPS/JSON     ┌──────────────┐      SQL      ┌──────────────┐
 │   client     │ ─────────────────► │     api      │ ────────────► │      db      │
-│ (web UI/SPA) │ ◄───────────────── │ (REST, TS)   │ ◄──────────── │ (Postgres)   │
+│ (web UI/SPA) │ ◄───────────────── │ (REST, TS)   │ ◄──────────── │ (SQLite file)│
 └──────────────┘                    └──────┬───────┘               └──────────────┘
                                            │ adapter interface
                                     ┌──────▼───────┐
@@ -129,7 +135,7 @@ from the local frontend to the Pages site.
 | ------------------ | ---------------------------------------------------- | ------------------------------------------------------- |
 | `client`           | Renders the UI and calls the API only                | Static build served by a small web server (e.g., nginx) |
 | `api`              | Business logic, validation, persistence, projections | Stateless; owns the DB schema and migrations            |
-| `db`               | PostgreSQL persistent storage                        | Named volume; backed up on a schedule                   |
+| `sqlite-data`      | Central SQLite database file (volume on `api`)       | Single writer; 1 GiB cap; backed up with `VACUUM INTO`  |
 | `worker` _(later)_ | Scheduled syncs from external providers              | Added only when the first integration is built          |
 
 > **Pragmatic note (KISS):** "Microservices" here means separate, independently deployable containers with clear boundaries. It does not mean many fine-grained services. Split the API further only if a real need comes up.
@@ -143,7 +149,7 @@ This stays close to your previous stack (TypeScript, npm, Prettier, an ORM) and 
 | Language   | TypeScript       | TypeScript (strict)                | Unchanged                                                                     |
 | API        | Express          | Fastify                            | Routing, lifecycle hooks, structured logging, and request injection for tests |
 | UI         | Handlebars (SSR) | Svelte 5 + Vite                    | Static SPA; the initial dashboard needs neither SSR nor a server-side router  |
-| DB         | SQLite           | PostgreSQL                         | Multi-user, concurrent access, and better date/numeric types                  |
+| DB         | SQLite           | SQLite (central, via the API)      | One shared file; small household data; no DB server to run                    |
 | ORM        | Sequelize        | Drizzle                            | Type-safe models and first-class SQL migrations                               |
 | Validation | —                | Zod (shared)                       | One schema used by client and API (DRY)                                       |
 | Charts     | —                | Chart.js or ECharts                | Framework-agnostic and Svelte-friendly; pick one and use it everywhere        |
@@ -154,7 +160,7 @@ This stays close to your previous stack (TypeScript, npm, Prettier, an ORM) and 
 
 ```
 /
-├─ backend/           # Implemented: REST API, PostgreSQL models, migrations, Compose
+├─ backend/           # Implemented: REST API, SQLite models, migrations, Compose
 │  └─ api/            # Implemented: distributable @studious/api client and contracts
 ├─ frontend/          # Implemented: Svelte SPA, API client, browser tests, nginx container
 ├─ compose.yaml       # Implemented: client + backend Compose stack
@@ -168,7 +174,7 @@ This stays close to your previous stack (TypeScript, npm, Prettier, an ORM) and 
 `packages/domain` contains all of the financial math, written as pure functions. This keeps the math testable and lets it exist in exactly one place.
 
 `backend/`, `frontend/`, root Compose, and the model documentation are implemented.
-Backend and browser tests use isolated PostgreSQL containers. The backend-owned
+Backend and browser tests use isolated in-memory SQLite databases. The backend-owned
 [`@studious/api` package](backend/api/README.md) distributes shared contracts and a
 typed HTTP client to the frontend. The domain package, other shared packages,
 and CI above are planned.
@@ -293,7 +299,7 @@ Household 1─* IntegrationConnection (future)
 ```
 
 - **Decision:** every household-owned table carries a required `householdId`, and all queries are scoped by it.
-- Money is stored as Postgres `NUMERIC(14,2)` (or integer cents), never as floating point.
+- Money is stored as two-place decimal strings (summed as integer cents), never as floating point.
 - Every table has `createdAt` and `updatedAt`. Soft deletes are used where history matters.
 
 ---
@@ -306,7 +312,7 @@ Tests are written alongside features. A feature is not "done" until its tests an
 | ----------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Unit              | Vitest                           | `packages/domain`: projections, amortization, recurrence, deductions. Target ~100% coverage here |
 | Contract          | Vitest + Zod                     | Request/response schemas in `packages/contracts`                                                 |
-| API / Integration | Vitest + Supertest               | Endpoints against a real Postgres in Docker                                                      |
+| API / Integration | Vitest + Supertest               | Endpoints against a real in-memory SQLite database                                               |
 | UI component      | Vitest + @testing-library/svelte | Forms, charts, calendar rendering                                                                |
 | End-to-end        | Playwright                       | Key user journeys run against the full `docker compose` stack                                    |
 
@@ -387,7 +393,7 @@ and ignores dependency, build, and coverage output.
 
 | Decision               | Choice                                                           |
 | ---------------------- | ---------------------------------------------------------------- |
-| Database               | PostgreSQL                                                       |
+| Database               | Central SQLite owned by the API (1 GiB cap)                      |
 | UI framework           | Svelte                                                           |
 | Investment projections | Compounding growth with time-weighted contributions              |
 | Data scoping           | Organized by household from v1 (`householdId` on all owned data) |

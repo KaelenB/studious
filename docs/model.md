@@ -10,8 +10,8 @@ the feature work.
 
 The [backend schema](../backend/src/models/schema.ts) currently implements `Household`,
 `Member`, `Account`, `BalanceSnapshot`, `ExpenseCategory`, and the one-off portion
-of `Expense`, plus `StatementArchive`, using Drizzle ORM and PostgreSQL.
-These use UUID identifiers and `NUMERIC(14,2)` amounts returned as decimal strings.
+of `Expense`, plus `StatementArchive`, using Drizzle ORM and one central SQLite database owned by the API.
+These use UUID identifiers and two-place decimal-string amounts.
 The API accepts manual accounts and snapshots, plus positive dated expenses
 with optional household category/member attribution. Expense schedules,
 `recurrenceRuleId`, tags, and all other entities below remain design definitions,
@@ -20,8 +20,9 @@ See the [backend guide](../backend/README.md) for setup and supported endpoints.
 
 ## Conventions
 
-- PostgreSQL is the source of truth. Use `NUMERIC(14,2)` for money, never
-  floating-point types.
+- The central SQLite database (capped at 1 GiB) is the source of truth. Store
+  money as two-place decimal strings validated by constraints, never as
+  floating-point types; aggregate in integer cents.
 - Every table has a primary key and `createdAt` / `updatedAt` timestamps.
 - Every household-owned record has a required `householdId`. Queries and
   relationships must be scoped to that household.
@@ -29,8 +30,8 @@ See the [backend guide](../backend/README.md) for setup and supported endpoints.
   member. A member must belong to the same household as the record.
 - Use soft deletion for records whose history affects financial reporting;
   deletion behavior for each entity is called out below.
-- Store dates as PostgreSQL `DATE` when the value is a calendar date, and
-  timestamps with time zone for instants.
+- Store calendar dates as `YYYY-MM-DD` text and instants as UTC epoch
+  milliseconds.
 - IDs are opaque identifiers; their concrete representation is an implementation
   choice.
 
@@ -98,32 +99,32 @@ corrected snapshot rather than overwriting historical values.
 The original document supporting an imported manual investment snapshot. Implemented
 for supported Sun Life Canadian PDFs and Questrade XLSX exports; OCR is not supported.
 
-| Field                                    | Type             | Constraints / notes                                                                                                       |
-| ---------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                     | UUID             | Primary key                                                                                                               |
-| `householdId`, `accountId`, `snapshotId` | UUID             | Composite FK to the same household/account snapshot; unique `snapshotId`                                                  |
-| `filename`                               | String           | Original display filename, no path/control characters, max 200                                                            |
-| `sha256`                                 | String           | SHA-256 of original bytes; unique per household/account                                                                   |
-| `amount`                                 | Decimal money    | Parsed closing plan value                                                                                                 |
-| `statementDate`                          | Date             | Closing period date; snapshot uses end-of-day UTC                                                                         |
-| `currency`                               | Currency code    | CAD for this parser                                                                                                       |
-| `byteLength`                             | Integer          | 1–10 MiB; equals stored byte length                                                                                       |
-| `provider`                               | Enum             | `SUNLIFE` or `QUESTRADE`; existing rows default to `SUNLIFE`                                                              |
-| `pdf`                                    | Binary (`bytea`) | Original PDF or XLSX bytes; never included in metadata responses                                                          |
-| `questrade`                              | JSONB?           | Export account type, FX, native cash and combined cash; null for Sun Life                                                 |
-| `investments`                            | JSONB?           | Historical rows: name, nullable category, decimal-string units, unitPrice, value; null for absent section/legacy archives |
-| `createdAt`, `updatedAt`                 | Timestamp        | Required                                                                                                                  |
+| Field                                    | Type            | Constraints / notes                                                                                                       |
+| ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                     | UUID            | Primary key                                                                                                               |
+| `householdId`, `accountId`, `snapshotId` | UUID            | Composite FK to the same household/account snapshot; unique `snapshotId`                                                  |
+| `filename`                               | String          | Original display filename, no path/control characters, max 200                                                            |
+| `sha256`                                 | String          | SHA-256 of original bytes; unique per household/account                                                                   |
+| `amount`                                 | Decimal money   | Parsed closing plan value                                                                                                 |
+| `statementDate`                          | Date            | Closing period date; snapshot uses end-of-day UTC                                                                         |
+| `currency`                               | Currency code   | CAD for this parser                                                                                                       |
+| `byteLength`                             | Integer         | 1–10 MiB; equals stored byte length                                                                                       |
+| `provider`                               | Enum            | `SUNLIFE` or `QUESTRADE`; existing rows default to `SUNLIFE`                                                              |
+| `pdf`                                    | Binary (`BLOB`) | Original PDF or XLSX bytes; never included in metadata responses                                                          |
+| `questrade`                              | JSON?           | Export account type, FX, native cash and combined cash; null for Sun Life                                                 |
+| `investments`                            | JSON?           | Historical rows: name, nullable category, decimal-string units, unitPrice, value; null for absent section/legacy archives |
+| `createdAt`, `updatedAt`                 | Timestamp       | Required                                                                                                                  |
 
 Snapshot and document archive are committed in one transaction. Preview does not persist
 either record. Original documents and snapshot metadata cannot be edited or deleted
 through the API; derived investment details can be re-extracted from the archived
 document without creating another snapshot. Account soft deletion preserves the original.
-Files are part of the PostgreSQL volume and database backups. Historical investment
+Files are stored as BLOBs in the central SQLite file and its backups. Historical investment
 rows are not the planned editable `Holding` entity and do not add to net worth.
 
 `StatementArchive` also supports Questrade InvestmentSummary XLSX imports.
 `provider` identifies `SUNLIFE` (default for existing archives) or `QUESTRADE`.
-Nullable `questrade` JSONB stores account type, export FX rate, native CAD/USD
+Nullable `questrade` JSON stores account type, export FX rate, native CAD/USD
 cash and CAD-combined cash as decimal strings. Investment rows optionally include
 symbol and native currency. The existing binary `pdf` column stores original
 bytes for both formats; metadata never includes file bytes. Questrade's undated

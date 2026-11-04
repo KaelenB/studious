@@ -1,38 +1,26 @@
-import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createApiClient, statementFileLimit } from '@studious/api';
 import { buildApp } from '../src/app.js';
-import { createDatabase } from '../src/db/client.js';
+import { testDatabase } from './database.js';
+import { StorageLimitError } from '../src/db/errors.js';
 import { balanceSnapshots, statementArchives } from '../src/models/schema.js';
 import { sunLifePdf, sunLifeInvestmentPdf } from './fixtures/sunlife.js';
 import { questradeXlsx } from './fixtures/questrade.js';
-
-let container: StartedPostgreSqlContainer | undefined;
-let database: ReturnType<typeof createDatabase>;
+let database: Awaited<ReturnType<typeof testDatabase>>;
 let app: ReturnType<typeof buildApp>;
 let api: ReturnType<typeof createApiClient>;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:17-alpine').start();
-  database = createDatabase(container.getConnectionUri());
-  const options = { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) };
-  await migrate(database.db, options);
-  await migrate(database.db, options);
-  app = buildApp(database.db, false);
+  database = await testDatabase();
+  app = buildApp(database, false);
   api = createApiClient(await app.listen({ host: '127.0.0.1', port: 0 }));
 }, 180000);
 
 afterAll(async () => {
   await app?.close();
-  try {
-    await database?.pool.end();
-  } finally {
-    await container?.stop();
-  }
+  await database?.close();
 }, 30000);
 
 async function setup() {
@@ -331,4 +319,50 @@ it('previews and imports a Questrade XLSX with native currencies, cash, atomic a
       })
     ).statusCode,
   ).toBe(422);
+});
+
+it('reports storage usage and rejects writes beyond the database size cap with 507', async () => {
+  const limitBytes = 16 * 1024 * 1024;
+  const small = await testDatabase(limitBytes);
+  const smallApp = buildApp(small, false);
+  try {
+    const client = createApiClient(await smallApp.listen({ host: '127.0.0.1', port: 0 }));
+    const before = await client.storage();
+    expect(before.limitBytes).toBe(limitBytes);
+    expect(before.usedBytes).toBeGreaterThan(0);
+    const home = await client.createHousehold('Full home', 'CAD');
+    const account = await client.addAccount(home.id, { name: 'Pension', type: 'INVESTMENT' });
+    await small.driver.query('CREATE TABLE filler (data BLOB)', [], 'run');
+    for (const size of [1024 * 1024, 4096, 64]) {
+      for (;;) {
+        try {
+          await small.driver.query('INSERT INTO filler VALUES (randomblob(?))', [size], 'run');
+        } catch (error) {
+          expect(error).toBeInstanceOf(StorageLimitError);
+          break;
+        }
+      }
+    }
+    const full = await client.storage();
+    expect(full.usedBytes).toBeGreaterThan(limitBytes - 64 * 1024);
+    expect(full.usedBytes).toBeLessThanOrEqual(limitBytes);
+    // A trailing PDF comment makes the archive need new pages without changing its content.
+    const padded = new Blob([new Uint8Array(sunLifePdf()), `\n%${'x'.repeat(65536)}\n`], {
+      type: 'application/pdf',
+    });
+    expect(await client.previewStatement(home.id, account.id, 'big.pdf', padded)).toMatchObject({
+      amount: '1234.56',
+    });
+    await expect(
+      client.importStatement(home.id, account.id, 'big.pdf', padded),
+    ).rejects.toMatchObject({
+      status: 507,
+      message: 'Storage limit of 16 MiB reached.',
+    });
+    expect(await client.statements(home.id, account.id)).toEqual([]);
+    expect(await client.balances(home.id, account.id)).toEqual([]);
+  } finally {
+    await smallApp.close();
+    await small.close();
+  }
 });

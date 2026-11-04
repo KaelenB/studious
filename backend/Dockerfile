@@ -17,9 +17,10 @@ COPY frontend/package.json ./frontend/
 COPY backend/api/package.json ./backend/api/
 RUN npm ci --omit=dev --workspace @studious/backend --include-workspace-root
 COPY --from=build /app/backend/dist ./backend/dist
-COPY --from=build /app/backend/drizzle ./backend/drizzle
 COPY --from=build /app/backend/api/dist ./backend/api/dist
 WORKDIR /app/backend
+RUN mkdir -p data && chown node:node data
 USER node
+VOLUME /app/backend/data
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "dist/server.js"]

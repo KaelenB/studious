@@ -30,6 +30,14 @@ describe('API boundary', () => {
       }),
     );
   });
+  it('accepts a transport override and reads storage usage', async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ usedBytes: 4096, limitBytes: 1073741824 })));
+    const local = createApiClient('/api', { fetch: transport });
+    expect(await local.storage()).toEqual({ usedBytes: 4096, limitBytes: 1073741824 });
+    expect(transport).toHaveBeenCalledWith('/api/storage', expect.any(Object));
+  });
   it('rejects malformed success payloads instead of displaying invented data', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')));
     await expect(api.household(householdId)).rejects.toThrow('unexpected response');

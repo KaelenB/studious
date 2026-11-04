@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { DatabaseError } from 'pg';
 import { ZodError } from 'zod';
 import { ApplicationError } from '../services/errors.js';
+import { DatabaseConstraintError, StorageLimitError, databaseError } from '../db/errors.js';
 
 export function registerErrorHandler(app: FastifyInstance) {
   app.setErrorHandler((error, request, reply) => {
@@ -15,16 +15,16 @@ export function registerErrorHandler(app: FastifyInstance) {
       return reply.code(error.code === 'NOT_FOUND' ? 404 : 409).send({ error: error.message });
     }
 
-    // Drizzle wraps PostgreSQL errors in a query error.
-    const databaseError =
-      error instanceof DatabaseError
-        ? error
-        : error instanceof Error && error.cause instanceof DatabaseError
-          ? error.cause
-          : undefined;
-
-    if (databaseError && ['23503', '23505', '23514'].includes(databaseError.code ?? '')) {
-      request.log.warn({ code: databaseError.code }, 'Database constraint rejected the request');
+    // Drizzle wraps driver errors in a query error.
+    const storageError = databaseError(error);
+    if (storageError instanceof StorageLimitError) {
+      request.log.warn({ limitBytes: storageError.limitBytes }, 'Storage limit reached');
+      return reply.code(507).send({
+        error: `${storageError.message}`,
+      });
+    }
+    if (storageError instanceof DatabaseConstraintError) {
+      request.log.warn('Database constraint rejected the request');
       return reply
         .code(409)
         .send({ error: 'Data conflicts with an existing record or relationship' });

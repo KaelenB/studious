@@ -40,7 +40,7 @@ describe('finance service without HTTP or a database', () => {
 
   beforeEach(() => {
     repository = mockRepository();
-    service = createFinanceService(repository);
+    service = createFinanceService(repository, async () => ({ usedBytes: 0, limitBytes: 1 }));
   });
 
   it('reports a missing household using an application error', async () => {

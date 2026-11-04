@@ -3,24 +3,24 @@ import { loadConfig } from '../src/config.js';
 import { accountBody, accountUpdateBody, historyQuery, snapshotBody } from '../src/validation.js';
 
 describe('backend validation', () => {
-  it('requires a PostgreSQL connection URL', () => {
-    expect(() => loadConfig({})).toThrow();
-    expect(() => loadConfig({ DATABASE_URL: 'https://example.com' })).toThrow();
-    expect(loadConfig({ DATABASE_URL: 'postgresql://localhost/studious' })).toMatchObject({
+  it('defaults to a local SQLite file capped at 1 GiB', () => {
+    expect(loadConfig({})).toMatchObject({
+      DATABASE_PATH: './data/studious.sqlite',
+      DATABASE_MAX_BYTES: 1073741824,
       PORT: 3000,
       HOST: '127.0.0.1',
       CORS_ORIGINS: [],
     });
+    expect(loadConfig({ DATABASE_MAX_BYTES: '67108864' }).DATABASE_MAX_BYTES).toBe(67108864);
+    for (const DATABASE_MAX_BYTES of ['1073741825', '1024', 'lots']) {
+      expect(() => loadConfig({ DATABASE_MAX_BYTES })).toThrow();
+    }
+    expect(() => loadConfig({ DATABASE_PATH: '' })).toThrow();
     expect(
-      loadConfig({
-        DATABASE_URL: 'postgresql://localhost/studious',
-        CORS_ORIGINS: 'https://user.github.io, http://127.0.0.1:4173',
-      }).CORS_ORIGINS,
+      loadConfig({ CORS_ORIGINS: 'https://user.github.io, http://127.0.0.1:4173' }).CORS_ORIGINS,
     ).toEqual(['https://user.github.io', 'http://127.0.0.1:4173']);
     for (const CORS_ORIGINS of ['*', 'https://user.github.io/studious', 'user.github.io']) {
-      expect(() =>
-        loadConfig({ DATABASE_URL: 'postgresql://localhost/studious', CORS_ORIGINS }),
-      ).toThrow();
+      expect(() => loadConfig({ CORS_ORIGINS })).toThrow();
     }
   });
 

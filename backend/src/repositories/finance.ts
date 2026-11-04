@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import type { Database } from '../db/client.js';
+import type { Database } from '../db/database.js';
 import {
   accounts,
   balanceSnapshots,
@@ -18,7 +18,7 @@ export function createFinanceRepository(db: Database) {
 
   return {
     async checkConnection() {
-      await db.execute(sql`select 1`);
+      await db.run(sql`select 1`);
     },
     async createHousehold(input: typeof households.$inferInsert) {
       const [household] = await db.insert(households).values(input).returning();

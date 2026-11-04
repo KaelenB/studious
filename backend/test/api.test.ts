@@ -1,11 +1,9 @@
-import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { createDatabase } from '../src/db/client.js';
+import { createDatabase } from '../src/db/database.js';
+import { testDatabase } from './database.js';
 import {
   accounts,
   balanceSnapshots,
@@ -14,9 +12,8 @@ import {
   type Member,
 } from '../src/models/schema.js';
 
-describe('PostgreSQL API integration', () => {
-  let container: StartedPostgreSqlContainer | undefined;
-  let database: ReturnType<typeof createDatabase> | undefined;
+describe('SQLite API integration', () => {
+  let database: Awaited<ReturnType<typeof testDatabase>> | undefined;
   let app: ReturnType<typeof buildApp>;
   let household: Household;
   let otherHousehold: Household;
@@ -24,14 +21,8 @@ describe('PostgreSQL API integration', () => {
   let account: Account;
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:17-alpine').start();
-    database = createDatabase(container.getConnectionUri());
-    const migrationOptions = {
-      migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)),
-    };
-    await migrate(database.db, migrationOptions);
-    await migrate(database.db, migrationOptions);
-    app = buildApp(database.db, false);
+    database = await testDatabase();
+    app = buildApp(database, false);
     await app.ready();
 
     const response = await app.inject({
@@ -51,11 +42,7 @@ describe('PostgreSQL API integration', () => {
 
   afterAll(async () => {
     await app?.close();
-    try {
-      await database?.pool.end();
-    } finally {
-      await container?.stop();
-    }
+    await database?.close();
   }, 30000);
 
   it('checks database health and household lookup', async () => {
@@ -231,8 +218,11 @@ describe('PostgreSQL API integration', () => {
   });
 
   it('reports an unavailable database without leaking connection details', async () => {
-    const brokenDatabase = createDatabase('postgresql://invalid:invalid@127.0.0.1:1/invalid');
-    const brokenApp = buildApp(brokenDatabase.db, false);
+    const brokenDatabase = createDatabase({
+      query: () => Promise.reject(new Error('unable to open /secret/path/studious.sqlite')),
+      close: async () => {},
+    });
+    const brokenApp = buildApp(brokenDatabase, false);
     try {
       const response = await brokenApp.inject('/health');
       expect(response.statusCode).toBe(503);
@@ -246,12 +236,12 @@ describe('PostgreSQL API integration', () => {
       expect(failure.json()).toEqual({ error: 'Internal server error' });
     } finally {
       await brokenApp.close();
-      await brokenDatabase.pool.end();
+      await brokenDatabase.close();
     }
   });
 
   it('allows only configured static-site origins and is disabled by default', async () => {
-    const corsApp = buildApp(database!.db, false, ['https://user.github.io']);
+    const corsApp = buildApp(database!, false, ['https://user.github.io']);
     try {
       const preflight = await corsApp.inject({
         method: 'OPTIONS',

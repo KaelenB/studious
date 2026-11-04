@@ -1,1 +1,0 @@
-ALTER TABLE "statement_archives" ADD COLUMN "investments" jsonb;

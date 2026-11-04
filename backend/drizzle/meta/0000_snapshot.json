@@ -1,82 +1,92 @@
 {
-  "id": "a39c6536-6530-4696-9688-0d79d8068410",
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "c91b069f-b9e1-40a0-ba6b-300ceb6a7835",
   "prevId": "00000000-0000-0000-0000-000000000000",
-  "version": "7",
-  "dialect": "postgresql",
   "tables": {
-    "public.accounts": {
+    "accounts": {
       "name": "accounts",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "household_id": {
           "name": "household_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "member_id": {
           "name": "member_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         },
         "name": {
           "name": "name",
-          "type": "varchar(200)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "type": {
           "name": "type",
-          "type": "account_type",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "currency": {
           "name": "currency",
-          "type": "varchar(3)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'CAD'"
         },
         "balance_source": {
           "name": "balance_source",
-          "type": "balance_source",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'MANUAL'"
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         },
         "deleted_at": {
           "name": "deleted_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "accounts_household_id_id_unique": {
+          "name": "accounts_household_id_id_unique",
+          "columns": ["household_id", "id"],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "accounts_household_id_households_id_fk": {
           "name": "accounts_household_id_households_id_fk",
@@ -98,111 +108,97 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "accounts_household_id_id_unique": {
-          "name": "accounts_household_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["household_id", "id"]
-        }
-      },
-      "policies": {},
+      "uniqueConstraints": {},
       "checkConstraints": {
         "accounts_name_not_blank": {
           "name": "accounts_name_not_blank",
-          "value": "length(trim(\"accounts\".\"name\")) > 0"
+          "value": "length(trim(\"accounts\".\"name\")) BETWEEN 1 AND 200"
+        },
+        "accounts_type_valid": {
+          "name": "accounts_type_valid",
+          "value": "\"accounts\".\"type\" IN ('CHEQUING', 'SAVINGS', 'INVESTMENT', 'CREDIT', 'LOAN', 'MORTGAGE')"
+        },
+        "accounts_balance_source_valid": {
+          "name": "accounts_balance_source_valid",
+          "value": "\"accounts\".\"balance_source\" IN ('MANUAL', 'PROJECTED', 'INTEGRATED')"
         },
         "accounts_currency_format": {
           "name": "accounts_currency_format",
-          "value": "\"accounts\".\"currency\" ~ '^[A-Z]{3}$'"
+          "value": "\"accounts\".\"currency\" GLOB '[A-Z][A-Z][A-Z]'"
         }
-      },
-      "isRLSEnabled": false
+      }
     },
-    "public.balance_snapshots": {
+    "balance_snapshots": {
       "name": "balance_snapshots",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "household_id": {
           "name": "household_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "account_id": {
           "name": "account_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "amount": {
           "name": "amount",
-          "type": "numeric(14, 2)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "as_of": {
           "name": "as_of",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "source": {
           "name": "source",
-          "type": "balance_source",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'MANUAL'"
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         }
       },
       "indexes": {
         "balance_snapshots_account_as_of_idx": {
           "name": "balance_snapshots_account_as_of_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "account_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "as_of",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
+          "columns": ["household_id", "account_id", "as_of"],
+          "isUnique": false
+        },
+        "balance_snapshots_household_account_id_unique": {
+          "name": "balance_snapshots_household_account_id_unique",
+          "columns": ["household_id", "account_id", "id"],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -227,105 +223,332 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {
+        "balance_snapshots_amount_format": {
+          "name": "balance_snapshots_amount_format",
+          "value": "\"balance_snapshots\".\"amount\" GLOB '*[0-9].[0-9][0-9]' AND length(\"balance_snapshots\".\"amount\") <= 16"
+        },
+        "balance_snapshots_source_valid": {
+          "name": "balance_snapshots_source_valid",
+          "value": "\"balance_snapshots\".\"source\" IN ('MANUAL', 'PROJECTED', 'INTEGRATED')"
+        }
+      }
     },
-    "public.households": {
-      "name": "households",
-      "schema": "",
+    "expense_categories": {
+      "name": "expense_categories",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         },
         "name": {
           "name": "name",
-          "type": "varchar(200)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "expense_categories_household_id_id_unique": {
+          "name": "expense_categories_household_id_id_unique",
+          "columns": ["household_id", "id"],
+          "isUnique": true
+        },
+        "expense_categories_household_name_unique": {
+          "name": "expense_categories_household_name_unique",
+          "columns": ["household_id", "name"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "expense_categories_household_id_households_id_fk": {
+          "name": "expense_categories_household_id_households_id_fk",
+          "tableFrom": "expense_categories",
+          "tableTo": "households",
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "expense_categories_name_not_blank": {
+          "name": "expense_categories_name_not_blank",
+          "value": "length(trim(\"expense_categories\".\"name\")) BETWEEN 1 AND 200"
+        }
+      }
+    },
+    "expenses": {
+      "name": "expenses",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'CAD'"
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "expenses_household_date_idx": {
+          "name": "expenses_household_date_idx",
+          "columns": ["household_id", "start_date", "id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "expenses_household_id_households_id_fk": {
+          "name": "expenses_household_id_households_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "households",
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_member_household_fk": {
+          "name": "expenses_member_household_fk",
+          "tableFrom": "expenses",
+          "tableTo": "members",
+          "columnsFrom": ["household_id", "member_id"],
+          "columnsTo": ["household_id", "id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_category_household_fk": {
+          "name": "expenses_category_household_fk",
+          "tableFrom": "expenses",
+          "tableTo": "expense_categories",
+          "columnsFrom": ["household_id", "category_id"],
+          "columnsTo": ["household_id", "id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "expenses_name_not_blank": {
+          "name": "expenses_name_not_blank",
+          "value": "length(trim(\"expenses\".\"name\")) BETWEEN 1 AND 200"
+        },
+        "expenses_amount_format": {
+          "name": "expenses_amount_format",
+          "value": "\"expenses\".\"amount\" GLOB '*[0-9].[0-9][0-9]' AND length(\"expenses\".\"amount\") <= 16"
+        },
+        "expenses_amount_positive": {
+          "name": "expenses_amount_positive",
+          "value": "CAST(\"expenses\".\"amount\" AS REAL) > 0"
+        },
+        "expenses_currency_format": {
+          "name": "expenses_currency_format",
+          "value": "\"expenses\".\"currency\" GLOB '[A-Z][A-Z][A-Z]'"
+        },
+        "expenses_start_date_format": {
+          "name": "expenses_start_date_format",
+          "value": "date(\"expenses\".\"start_date\") IS \"expenses\".\"start_date\""
+        }
+      }
+    },
+    "households": {
+      "name": "households",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         },
         "default_currency": {
           "name": "default_currency",
-          "type": "varchar(3)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'CAD'"
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {
         "households_name_not_blank": {
           "name": "households_name_not_blank",
-          "value": "length(trim(\"households\".\"name\")) > 0"
+          "value": "length(trim(\"households\".\"name\")) BETWEEN 1 AND 200"
         },
         "households_currency_format": {
           "name": "households_currency_format",
-          "value": "\"households\".\"default_currency\" ~ '^[A-Z]{3}$'"
+          "value": "\"households\".\"default_currency\" GLOB '[A-Z][A-Z][A-Z]'"
         }
-      },
-      "isRLSEnabled": false
+      }
     },
-    "public.members": {
+    "members": {
       "name": "members",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "gen_random_uuid()"
+          "autoincrement": false
         },
         "household_id": {
           "name": "household_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "name": {
           "name": "name",
-          "type": "varchar(200)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "members_household_id_id_unique": {
+          "name": "members_household_id_id_unique",
+          "columns": ["household_id", "id"],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "members_household_id_households_id_fk": {
           "name": "members_household_id_households_id_fk",
@@ -338,43 +561,185 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "members_household_id_id_unique": {
-          "name": "members_household_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["household_id", "id"]
-        }
-      },
-      "policies": {},
+      "uniqueConstraints": {},
       "checkConstraints": {
         "members_name_not_blank": {
           "name": "members_name_not_blank",
-          "value": "length(trim(\"members\".\"name\")) > 0"
+          "value": "length(trim(\"members\".\"name\")) BETWEEN 1 AND 200"
+        }
+      }
+    },
+    "statement_archives": {
+      "name": "statement_archives",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "filename": {
+          "name": "filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statement_date": {
+          "name": "statement_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "byte_length": {
+          "name": "byte_length",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pdf": {
+          "name": "pdf",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "investments": {
+          "name": "investments",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'SUNLIFE'"
+        },
+        "questrade": {
+          "name": "questrade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
-      "isRLSEnabled": false
+      "indexes": {
+        "statement_archives_account_created_idx": {
+          "name": "statement_archives_account_created_idx",
+          "columns": ["household_id", "account_id", "created_at"],
+          "isUnique": false
+        },
+        "statement_archives_account_hash_unique": {
+          "name": "statement_archives_account_hash_unique",
+          "columns": ["household_id", "account_id", "sha256"],
+          "isUnique": true
+        },
+        "statement_archives_snapshot_unique": {
+          "name": "statement_archives_snapshot_unique",
+          "columns": ["snapshot_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "statement_archives_snapshot_household_account_fk": {
+          "name": "statement_archives_snapshot_household_account_fk",
+          "tableFrom": "statement_archives",
+          "tableTo": "balance_snapshots",
+          "columnsFrom": ["household_id", "account_id", "snapshot_id"],
+          "columnsTo": ["household_id", "account_id", "id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "statement_archives_size_valid": {
+          "name": "statement_archives_size_valid",
+          "value": "\"statement_archives\".\"byte_length\" = length(\"statement_archives\".\"pdf\") AND \"statement_archives\".\"byte_length\" > 0 AND \"statement_archives\".\"byte_length\" <= 10485760"
+        },
+        "statement_archives_provider_valid": {
+          "name": "statement_archives_provider_valid",
+          "value": "\"statement_archives\".\"provider\" IN ('SUNLIFE', 'QUESTRADE')"
+        },
+        "statement_archives_amount_format": {
+          "name": "statement_archives_amount_format",
+          "value": "\"statement_archives\".\"amount\" GLOB '*[0-9].[0-9][0-9]' AND length(\"statement_archives\".\"amount\") <= 16"
+        }
+      }
     }
   },
-  "enums": {
-    "public.account_type": {
-      "name": "account_type",
-      "schema": "public",
-      "values": ["CHEQUING", "SAVINGS", "INVESTMENT", "CREDIT", "LOAN", "MORTGAGE"]
-    },
-    "public.balance_source": {
-      "name": "balance_source",
-      "schema": "public",
-      "values": ["MANUAL", "PROJECTED", "INTEGRATED"]
-    }
-  },
-  "schemas": {},
-  "sequences": {},
-  "roles": {},
-  "policies": {},
   "views": {},
+  "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
   }
 }

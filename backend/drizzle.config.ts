@@ -1,14 +1,9 @@
-import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is required; copy .env.example to .env and configure PostgreSQL.');
-}
-
+// Migrations are generated offline; runtime applies them from src/db/migrations.generated.ts.
 export default defineConfig({
-  dialect: 'postgresql',
+  dialect: 'sqlite',
   schema: './src/models/schema.ts',
   out: './drizzle',
-  dbCredentials: { url: process.env.DATABASE_URL },
   strict: true,
 });

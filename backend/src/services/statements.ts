@@ -2,17 +2,18 @@ import type { FinanceService } from './finance.js';
 import type { createStatementRepository } from '../repositories/statements.js';
 import { parseSunLifePdf } from './sunlife.js';
 import { ApplicationError } from './errors.js';
-import { StatementError } from './sunlife.js';
+import { StatementError, type DocumentExtractors } from './extractors.js';
 import { parseQuestradeXlsx } from './questrade.js';
 
 export function createStatementService(
   repository: ReturnType<typeof createStatementRepository>,
   finance: FinanceService,
+  extractors: DocumentExtractors,
 ) {
   async function preview(
     householdId: string,
     accountId: string,
-    pdf: Buffer,
+    pdf: Uint8Array,
     filename = 'statement.pdf',
     statementDate?: string,
   ) {
@@ -28,8 +29,8 @@ export function createStatementService(
       );
     }
     return /\.xlsx$/i.test(filename)
-      ? parseQuestradeXlsx(pdf, statementDate)
-      : parseSunLifePdf(pdf);
+      ? parseQuestradeXlsx(pdf, statementDate, extractors)
+      : parseSunLifePdf(pdf, extractors);
   }
   return {
     preview,
@@ -38,8 +39,8 @@ export function createStatementService(
       if (!archive) throw new ApplicationError('NOT_FOUND', 'Archived statement not found');
       const parsed =
         archive.provider === 'QUESTRADE'
-          ? await parseQuestradeXlsx(archive.pdf, archive.statementDate)
-          : await parseSunLifePdf(archive.pdf);
+          ? await parseQuestradeXlsx(archive.pdf, archive.statementDate, extractors)
+          : await parseSunLifePdf(archive.pdf, extractors);
       if (
         parsed.sha256 !== archive.sha256 ||
         parsed.amount !== archive.amount ||
@@ -66,7 +67,7 @@ export function createStatementService(
       householdId: string,
       accountId: string,
       filename: string,
-      pdf: Buffer,
+      pdf: Uint8Array,
       statementDate?: string,
     ) {
       const parsed = await preview(householdId, accountId, pdf, filename, statementDate);

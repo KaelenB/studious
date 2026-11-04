@@ -2,12 +2,12 @@
 
 `@studious/api` is the backend-owned, browser-safe API package consumed by the
 frontend. It contains the public request/response contracts, inferred TypeScript
-DTOs, and a typed HTTP client. It contains no PostgreSQL, Drizzle, Fastify,
+DTOs, and a typed HTTP client. It contains no SQLite, Drizzle, Fastify,
 environment settings, or credentials.
 
 ## Use in this repository
 
-Both backend and frontend depend on `@studious/api` at version `0.5.0`. npm
+Both backend and frontend depend on `@studious/api` at version `0.6.0`. npm
 workspaces link the package locally during `npm ci`; nothing is published or
 downloaded from a private registry.
 
@@ -21,7 +21,10 @@ const accounts: Account[] = await api.accounts(household.id);
 
 Use an absolute base URL for Node.js callers, for example
 `createApiClient('http://127.0.0.1:3000')`. The browser uses its same-origin
-`/api` proxy. Read operations accept an optional `AbortSignal`.
+`/api` proxy. Pass `{ fetch }` as the second argument to route requests through
+another transport; the GitHub Pages build uses this to call the API running
+inside the browser. Read operations accept an optional `AbortSignal`.
+`storage()` returns `{ usedBytes, limitBytes }` for the SQLite database.
 Inputs and JSON responses are validated with the distributed Zod schemas.
 HTTP errors throw `ApiError` with a `status` property; validation errors throw
 before a request is sent. Dates and monetary values remain strings on the wire.
@@ -85,7 +88,7 @@ npm pack --workspace @studious/api --pack-destination .
 ```
 
 The `prepack` hook builds JavaScript and `.d.ts` declarations. The resulting
-`studious-api-0.5.0.tgz` can be installed into a separate frontend project with
+`studious-api-0.6.0.tgz` can be installed into a separate frontend project with
 `npm install <path-to-tarball>`. Only compiled distribution files, package metadata,
 and this guide are included. `zod` is the sole runtime dependency. No registry
 publish step is performed by this project.
@@ -93,4 +96,4 @@ publish step is performed by this project.
 Version public contract changes with the package; breaking changes require a
 major version once the API is stable. Run root typecheck, build, unit/integration,
 and browser tests before distributing. Integration tests exercise the packaged
-client against every real backend operation and an isolated PostgreSQL database.
+client against every real backend operation and an isolated in-memory SQLite database.

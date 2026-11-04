@@ -23,6 +23,7 @@ export function createFinanceController(service: FinanceService) {
         return reply.code(503).send({ status: 'unavailable', database: 'unavailable' });
       }
     },
+    storage: () => service.storage(),
     async createHousehold(request: FastifyRequest, reply: FastifyReply) {
       const household = await service.createHousehold(householdBody.parse(request.body));
       return reply.code(201).send(householdView(household));

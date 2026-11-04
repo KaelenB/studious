@@ -1,36 +1,17 @@
-import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
   statementFileLimit,
   statementPreviewSchema,
   type StatementInvestment,
 } from '@studious/api';
-import { StatementError } from './sunlife.js';
+import { StatementError, sha256Hex, startsWith, type DocumentExtractors } from './extractors.js';
 
-const worker = `
- const { readSheet } = require('read-excel-file/node');
- const chunks=[];
- process.stdin.on('data', chunk=>chunks.push(chunk));
- process.stdin.on('end',async()=>{
-  try {
-   const sheets={};
-   for(const name of ['Balances','Positions']) {
-    const rows=await readSheet(Buffer.concat(chunks), name, {parseNumber: value=>value});
-    if(rows.length>502 || rows.some(row=>row.length>40)) throw new Error('Unsupported sheet');
-    sheets[name]=rows;
-   }
-   process.stdout.write(JSON.stringify(sheets));
-  } catch { process.exitCode=1; }
- });
-`;
 const cell = z.union([z.string().max(500), z.number().finite(), z.null()]);
 const rowsSchema = z.object({
-  Balances: z.array(z.array(cell)).max(502),
-  Positions: z.array(z.array(cell)).max(502),
+  Balances: z.array(z.array(cell).max(40)).max(502),
+  Positions: z.array(z.array(cell).max(40)).max(502),
 });
 type Cell = z.infer<typeof cell>;
-let active = 0;
 
 function decimal(value: Cell | undefined, places: number, label: string) {
   const text = String(value ?? '').trim();
@@ -57,7 +38,11 @@ function table(rows: Cell[][], required: string[]) {
   return rows.slice(1).map((row) => columns.map((index) => row[index]));
 }
 
-export async function parseQuestradeXlsx(bytes: Buffer, statementDate: string | undefined) {
+export async function parseQuestradeXlsx(
+  bytes: Uint8Array,
+  statementDate: string | undefined,
+  extractors: DocumentExtractors,
+) {
   if (
     !statementDate ||
     !z.iso.date().safeParse(statementDate).success ||
@@ -65,63 +50,10 @@ export async function parseQuestradeXlsx(bytes: Buffer, statementDate: string | 
   ) {
     throw new StatementError('Enter the observation date for this undated Questrade export.');
   }
-  if (
-    bytes.length > statementFileLimit ||
-    !bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 3, 4]))
-  ) {
+  if (bytes.length > statementFileLimit || !startsWith(bytes, [0x50, 0x4b, 3, 4])) {
     throw new StatementError('Upload a valid XLSX no larger than 10 MiB.');
   }
-  if (active >= 2)
-    throw new StatementError('The spreadsheet parser is busy. Please retry shortly.');
-  active++;
-  let output: string;
-  try {
-    output = await new Promise<string>((resolve, reject) => {
-      const child = spawn(process.execPath, ['--max-old-space-size=128', '-e', worker], {
-        stdio: ['pipe', 'pipe', 'ignore'],
-        windowsHide: true,
-      });
-      let text = '';
-      let failure: Error | undefined;
-      const timer = setTimeout(() => {
-        failure = new StatementError('Spreadsheet parsing timed out.');
-        child.kill();
-      }, 15000);
-      child.stdout.on('data', (data: Buffer) => {
-        text += data.toString('utf8');
-        if (text.length > 1000000) {
-          failure = new StatementError('Spreadsheet content exceeds the supported size.');
-          child.kill();
-        }
-      });
-      child.stdin.on('error', () => {
-        failure = new StatementError('Could not send spreadsheet to parser.');
-      });
-      child.on('error', () => {
-        failure = new StatementError('Spreadsheet parser could not be started.');
-      });
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        if (failure) reject(failure);
-        else if (code !== 0)
-          reject(
-            new StatementError(
-              'Cannot read this Questrade workbook. Use an unencrypted export with Balances and Positions sheets.',
-            ),
-          );
-        else resolve(text);
-      });
-      child.stdin.end(bytes);
-    });
-  } finally {
-    active--;
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(output);
-  } catch {
-    throw new StatementError('Invalid spreadsheet parser output.');
-  }
+  const raw = await extractors.workbookSheets(bytes, ['Balances', 'Positions']);
   const validated = rowsSchema.safeParse(raw);
   if (!validated.success) throw new StatementError('Unsupported Questrade worksheet cells.');
   const balances = table(validated.data.Balances, [
@@ -209,7 +141,7 @@ export async function parseQuestradeXlsx(bytes: Buffer, statementDate: string | 
     amount,
     statementDate,
     currency: 'CAD',
-    sha256: createHash('sha256').update(bytes).digest('hex'),
+    sha256: await sha256Hex(bytes),
     investments: investments.length ? investments : null,
     questrade: {
       accountType: String(b[1]),

@@ -80,6 +80,11 @@ export const healthSchema = z.object({
   status: z.literal('ok'),
   database: z.literal('ok'),
 });
+export const storageSchema = z.object({
+  usedBytes: z.number().int().nonnegative(),
+  limitBytes: z.number().int().positive(),
+});
+export type Storage = z.infer<typeof storageSchema>;
 
 export type Household = z.infer<typeof householdSchema>;
 export type Member = z.infer<typeof memberSchema>;

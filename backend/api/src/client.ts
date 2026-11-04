@@ -5,6 +5,7 @@ import {
   accountSchema,
   accountUpdateBody,
   healthSchema,
+  storageSchema,
   historyQuery,
   householdBody,
   householdParams,
@@ -42,13 +43,19 @@ export class ApiError extends Error {
   }
 }
 
-export function createApiClient(baseUrl: string) {
+export interface ApiClientOptions {
+  /** Transport override, e.g. a test double. Defaults to the global fetch. */
+  fetch?: (input: string, init?: RequestInit) => Promise<Response>;
+}
+
+export function createApiClient(baseUrl: string, options: ApiClientOptions = {}) {
   const base = baseUrl.replace(/\/+$/, '');
+  const transport = options.fetch ?? ((input, init) => fetch(input, init));
 
   async function responseFor(path: string, options: RequestInit = {}): Promise<Response> {
     let response: Response;
     try {
-      response = await fetch(`${base}${path}`, {
+      response = await transport(`${base}${path}`, {
         ...options,
         headers: {
           ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -135,6 +142,7 @@ export function createApiClient(baseUrl: string) {
 
   return {
     health: (signal?: AbortSignal) => request('/health', healthSchema, { signal }),
+    storage: (signal?: AbortSignal) => request('/storage', storageSchema, { signal }),
     createHousehold: (name: string, defaultCurrency: string) =>
       request('/households', householdSchema, {
         method: 'POST',

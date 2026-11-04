@@ -1,38 +1,26 @@
-import { fileURLToPath } from 'node:url';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { test, expect } from '@playwright/test';
 import { buildApp } from '../../backend/src/app';
-import { createDatabase } from '../../backend/src/db/client';
+import { openNodeDatabase } from '../../backend/src/db/node';
 import { sunLifeInvestmentPdf } from '../../backend/test/fixtures/sunlife';
 import { readFile } from 'node:fs/promises';
 import { questradeXlsx } from '../../backend/test/fixtures/questrade';
 
-let container: StartedPostgreSqlContainer | undefined;
-let database: ReturnType<typeof createDatabase> | undefined;
+let database: ReturnType<typeof openNodeDatabase> | undefined;
 let app: ReturnType<typeof buildApp> | undefined;
 
 test.beforeAll(async () => {
-  test.setTimeout(180000);
-  container = await new PostgreSqlContainer('postgres:17-alpine').start();
-  database = createDatabase(container.getConnectionUri());
-  await migrate(database.db, {
-    migrationsFolder: fileURLToPath(new URL('../../backend/drizzle', import.meta.url)),
-  });
-  app = buildApp(database.db, false);
+  database = openNodeDatabase(':memory:');
+  await database.migrate();
+  app = buildApp(database, false);
   await app.listen({ host: '127.0.0.1', port: 3101 });
 });
 
 test.afterAll(async () => {
   await app?.close();
-  try {
-    await database?.pool.end();
-  } finally {
-    await container?.stop();
-  }
+  await database?.close();
 });
 
-test('household, member, account, balance, reload, edit and archive work with live PostgreSQL', async ({
+test('household, member, account, balance, reload, edit and archive work with the live SQLite API', async ({
   page,
 }) => {
   const pageErrors: string[] = [];

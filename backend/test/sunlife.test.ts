@@ -1,10 +1,13 @@
 import { expect, it } from 'vitest';
 import {
-  parseSunLifePdf,
+  parseSunLifePdf as parsePdf,
   parseSunLifeText,
   parseSunLifeInvestments,
 } from '../src/services/sunlife.js';
+import { nodeExtractors } from '../src/services/extractors.node.js';
 import { sunLifePdf, sunLifeInvestmentPdf } from './fixtures/sunlife.js';
+
+const parseSunLifePdf = (pdf: Uint8Array) => parsePdf(pdf, nodeExtractors);
 
 it('extracts the latest total plan value from a real text-based PDF', async () => {
   expect(await parseSunLifePdf(sunLifePdf())).toMatchObject({
