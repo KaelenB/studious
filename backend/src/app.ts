@@ -16,7 +16,7 @@ export function buildApp(
     // Allows a separately hosted static frontend to call this API.
     void app.register(cors, {
       origin: corsOrigins,
-      methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'],
+      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedHeaders: ['Content-Type'],
       exposedHeaders: ['Content-Disposition'],
       maxAge: 600,

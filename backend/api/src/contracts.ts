@@ -226,3 +226,126 @@ export const statementSchema = statementPreviewSchema.extend({
 });
 export type StatementPreview = z.infer<typeof statementPreviewSchema>;
 export type StatementArchive = z.infer<typeof statementSchema>;
+
+export const rateTypes = ['FIXED', 'VARIABLE'] as const;
+/** Canadian fixed-rate mortgages compound semi-annually; variable-rate lenders may compound monthly. */
+export const compoundingFrequencies = ['SEMI_ANNUAL', 'MONTHLY'] as const;
+export const paymentFrequencies = [
+  'MONTHLY',
+  'BIWEEKLY',
+  'ACCELERATED_BIWEEKLY',
+  'WEEKLY',
+  'ACCELERATED_WEEKLY',
+] as const;
+/** Annual percentage rate such as `4.79`, from 0 to 30 with up to three decimals. */
+export const ratePattern = /^(?:\d|[12]\d|30)(?:\.\d{1,3})?$/;
+const positiveMoney = z
+  .string()
+  .regex(moneyPattern, 'Use a decimal string with two places')
+  .refine((value) => !value.startsWith('-') && value !== '0.00', 'Amount must be positive');
+const calendarDate = z.iso
+  .date()
+  .refine((value) => value >= '1000-01-01', 'Use a year from 1000 to 9999');
+
+export const mortgageTermsBody = z.strictObject({
+  principal: positiveMoney,
+  annualRate: z
+    .string()
+    .regex(ratePattern, 'Use an annual percentage such as 4.79')
+    .refine((value) => Number(value) <= 30, 'Rate must be 30% or lower'),
+  rateType: z.enum(rateTypes).default('FIXED'),
+  compounding: z.enum(compoundingFrequencies).default('SEMI_ANNUAL'),
+  amortizationMonths: z.number().int().min(1).max(600),
+  termMonths: z.number().int().min(1).max(120),
+  paymentFrequency: z.enum(paymentFrequencies).default('MONTHLY'),
+  startDate: calendarDate,
+  /** Lender's actual regular payment; null derives it from the terms. */
+  paymentAmount: positiveMoney.nullable().default(null),
+  /** Current property value used for equity; null hides equity. */
+  propertyValue: positiveMoney.nullable().default(null),
+});
+export const prepaymentBody = z.strictObject({
+  amount: positiveMoney,
+  date: calendarDate,
+  note: z.string().trim().max(200).nullable().default(null),
+});
+export const mortgageQuery = z.strictObject({ asOf: calendarDate.optional() });
+export const prepaymentParams = accountParams.extend({ prepaymentId: z.uuid() });
+
+const money = z.string().regex(moneyPattern);
+export const mortgageTermsSchema = z.object({
+  accountId: z.uuid(),
+  householdId: z.uuid(),
+  principal: money,
+  annualRate: z.string().regex(ratePattern),
+  rateType: z.enum(rateTypes),
+  compounding: z.enum(compoundingFrequencies),
+  amortizationMonths: z.number().int(),
+  termMonths: z.number().int(),
+  paymentFrequency: z.enum(paymentFrequencies),
+  startDate: z.iso.date(),
+  paymentAmount: money.nullable(),
+  propertyValue: money.nullable(),
+  ...timestamps,
+});
+export const prepaymentSchema = z.object({
+  id: z.uuid(),
+  householdId: z.uuid(),
+  accountId: z.uuid(),
+  amount: money,
+  date: z.iso.date(),
+  note: z.string().nullable(),
+  ...timestamps,
+});
+const paymentSchema = z.object({
+  date: z.iso.date(),
+  payment: money,
+  interest: money,
+  principal: money,
+  balance: money,
+});
+export const mortgageProjectionSchema = z.object({
+  asOf: z.iso.date(),
+  periodsPerYear: z.number().int().positive(),
+  /** Regular payment used by the projection (the lender amount when supplied). */
+  payment: money,
+  calculatedPayment: money,
+  balance: money,
+  equity: money.nullable(),
+  interestPaid: money,
+  principalPaid: money,
+  prepaid: money,
+  nextPayment: paymentSchema.nullable(),
+  termEndDate: z.iso.date(),
+  balanceAtTermEnd: money,
+  payoffDate: z.iso.date(),
+  paymentsRemaining: z.number().int().nonnegative(),
+  totalInterest: money,
+  /** Same terms without any prepayments, to show their effect. */
+  baseline: z.object({ payoffDate: z.iso.date(), totalInterest: money }),
+  interestSaved: money,
+  years: z.array(
+    z.object({
+      year: z.number().int(),
+      interest: money,
+      principal: money,
+      prepaid: money,
+      endingBalance: money,
+    }),
+  ),
+});
+export const mortgageSchema = z.object({
+  terms: mortgageTermsSchema.nullable(),
+  prepayments: z.array(prepaymentSchema),
+  projection: mortgageProjectionSchema.nullable(),
+});
+export type RateType = (typeof rateTypes)[number];
+export type CompoundingFrequency = (typeof compoundingFrequencies)[number];
+export type PaymentFrequency = (typeof paymentFrequencies)[number];
+export type MortgageTermsInput = z.input<typeof mortgageTermsBody>;
+export type MortgageTerms = z.infer<typeof mortgageTermsSchema>;
+export type PrepaymentInput = z.input<typeof prepaymentBody>;
+export type Prepayment = z.infer<typeof prepaymentSchema>;
+export type MortgageProjection = z.infer<typeof mortgageProjectionSchema>;
+export type MortgagePayment = z.infer<typeof paymentSchema>;
+export type Mortgage = z.infer<typeof mortgageSchema>;

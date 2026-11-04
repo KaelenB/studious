@@ -1,13 +1,20 @@
 import {
   createApiClient,
   type Account,
+  type CompoundingFrequency,
   type InvestmentSubtype,
+  type PaymentFrequency,
+  type RateType,
   type Snapshot,
 } from '@studious/api';
 
 export {
   accountTypes,
   investmentSubtypes,
+  compoundingFrequencies,
+  paymentFrequencies,
+  rateTypes,
+  ratePattern,
   moneyPattern,
   ApiError,
   type Household,
@@ -16,6 +23,11 @@ export {
   type Snapshot,
   type AccountInput,
   type InvestmentSubtype,
+  type Mortgage,
+  type MortgageProjection,
+  type MortgageTerms,
+  type MortgageTermsInput,
+  type Prepayment,
 } from '@studious/api';
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -64,6 +76,31 @@ export const subtypeDescriptions: Record<InvestmentSubtype, string> = {
   DPSP: 'Deferred Profit Sharing Plan',
   NON_REGISTERED: 'Non-registered (taxable)',
 };
+
+export const paymentFrequencyLabels: Record<PaymentFrequency, string> = {
+  MONTHLY: 'Monthly',
+  BIWEEKLY: 'Bi-weekly',
+  ACCELERATED_BIWEEKLY: 'Accelerated bi-weekly',
+  WEEKLY: 'Weekly',
+  ACCELERATED_WEEKLY: 'Accelerated weekly',
+};
+
+export const rateTypeLabels: Record<RateType, string> = { FIXED: 'Fixed', VARIABLE: 'Variable' };
+
+export const compoundingLabels: Record<CompoundingFrequency, string> = {
+  SEMI_ANNUAL: 'Semi-annual (Canadian fixed)',
+  MONTHLY: 'Monthly',
+};
+
+/** Formats a month count such as 300 as "25 years" or 66 as "5 years 6 months". */
+export function durationLabel(months: number) {
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  const parts = [];
+  if (years) parts.push(`${years} ${years === 1 ? 'year' : 'years'}`);
+  if (rest || !years) parts.push(`${rest} ${rest === 1 ? 'month' : 'months'}`);
+  return parts.join(' ');
+}
 
 export function accountKind(account: Pick<Account, 'type' | 'subtype'>) {
   const base = accountLabels[account.type];

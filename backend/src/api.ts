@@ -13,6 +13,10 @@ import { createStatementRepository } from './repositories/statements.js';
 import { createStatementService } from './services/statements.js';
 import { createStatementController } from './controllers/statements.js';
 import { registerStatementRoutes } from './routes/statements.js';
+import { createMortgageRepository } from './repositories/mortgages.js';
+import { createMortgageService } from './services/mortgages.js';
+import { createMortgageController } from './controllers/mortgages.js';
+import { registerMortgageRoutes } from './routes/mortgages.js';
 import type { DocumentExtractors } from './services/extractors.js';
 
 /**
@@ -38,6 +42,11 @@ export function registerApi(
   registerExpenseRoutes(
     app,
     createExpenseController(createExpenseService(createExpenseRepository(db))),
+    service,
+  );
+  registerMortgageRoutes(
+    app,
+    createMortgageController(createMortgageService(createMortgageRepository(db), service)),
     service,
   );
   return app;

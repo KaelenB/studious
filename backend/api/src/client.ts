@@ -31,6 +31,14 @@ import {
   statementQuery,
   statementPreviewSchema,
   statementSchema,
+  mortgageQuery,
+  mortgageSchema,
+  mortgageTermsBody,
+  prepaymentBody,
+  prepaymentParams,
+  prepaymentSchema,
+  type MortgageTermsInput,
+  type PrepaymentInput,
 } from './contracts.js';
 
 export class ApiError extends Error {
@@ -184,6 +192,32 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
         method: 'POST',
         body: json(snapshotBody.parse({ amount, asOf })),
       }),
+    mortgage: (id: string, accountId: string, asOf?: string, signal?: AbortSignal) => {
+      const query = mortgageQuery.parse({ asOf });
+      return request(
+        `${accountPath(id, accountId)}/mortgage${query.asOf ? `?asOf=${query.asOf}` : ''}`,
+        mortgageSchema,
+        { signal },
+      );
+    },
+    saveMortgageTerms: (id: string, accountId: string, input: MortgageTermsInput) =>
+      request(`${accountPath(id, accountId)}/mortgage`, mortgageSchema, {
+        method: 'PUT',
+        body: json(mortgageTermsBody.parse(input)),
+      }),
+    addPrepayment: (id: string, accountId: string, input: PrepaymentInput) =>
+      request(`${accountPath(id, accountId)}/mortgage/prepayments`, prepaymentSchema, {
+        method: 'POST',
+        body: json(prepaymentBody.parse(input)),
+      }),
+    deletePrepayment(id: string, accountId: string, prepaymentId: string) {
+      prepaymentParams.parse({ householdId: id, accountId, prepaymentId });
+      return request(
+        `${accountPath(id, accountId)}/mortgage/prepayments/${encodeURIComponent(prepaymentId)}`,
+        z.undefined(),
+        { method: 'DELETE' },
+      );
+    },
     expenseCategories: (id: string, signal?: AbortSignal) =>
       request(`${pathFor(id)}/expense-categories`, z.array(expenseCategorySchema), { signal }),
     addExpenseCategory: (id: string, name: string) =>

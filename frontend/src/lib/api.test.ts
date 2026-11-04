@@ -3,11 +3,21 @@ import {
   api,
   accountKind,
   accountLabels,
+  compoundingLabels,
+  durationLabel,
   errorMessage,
+  paymentFrequencyLabels,
+  rateTypeLabels,
   subtypeDescriptions,
   subtypeLabels,
 } from './api';
-import { accountTypes, investmentSubtypes } from '@studious/api';
+import {
+  accountTypes,
+  compoundingFrequencies,
+  investmentSubtypes,
+  paymentFrequencies,
+  rateTypes,
+} from '@studious/api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -27,6 +37,16 @@ it('labels every investment sub-type and combines it with the account type', () 
     'Investment \u00b7 Non-registered',
   );
   expect(accountKind({ type: 'SAVINGS', subtype: null })).toBe('Savings');
+});
+
+it('labels mortgage options and durations', () => {
+  expect(Object.keys(paymentFrequencyLabels)).toEqual([...paymentFrequencies]);
+  expect(Object.keys(rateTypeLabels)).toEqual([...rateTypes]);
+  expect(Object.keys(compoundingLabels)).toEqual([...compoundingFrequencies]);
+  expect(durationLabel(300)).toBe('25 years');
+  expect(durationLabel(66)).toBe('5 years 6 months');
+  expect(durationLabel(12)).toBe('1 year');
+  expect(durationLabel(1)).toBe('1 month');
 });
 
 it('explains where a hosted build expects the API when it is unreachable', () => {

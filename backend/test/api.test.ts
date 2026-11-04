@@ -7,10 +7,22 @@ import { testDatabase } from './database.js';
 import {
   accounts,
   balanceSnapshots,
+  mortgagePrepayments,
+  mortgageTerms,
   type Account,
   type Household,
   type Member,
 } from '../src/models/schema.js';
+
+const terms = {
+  principal: '500000.00',
+  annualRate: '5',
+  amortizationMonths: 300,
+  termMonths: 60,
+  startDate: '2024-01-15',
+  propertyValue: '750000.00',
+};
+const prepayment = { amount: '20000.00', date: '2024-06-01', note: 'Bonus' };
 
 describe('SQLite API integration', () => {
   let database: Awaited<ReturnType<typeof testDatabase>> | undefined;
@@ -266,6 +278,135 @@ describe('SQLite API integration', () => {
     }
   });
 
+  it('stores mortgage terms, prepayments and an amortization projection', async () => {
+    const base = `/households/${household.id}/accounts`;
+    const created = await app.inject({
+      method: 'POST',
+      url: base,
+      payload: { name: 'Home mortgage', type: 'MORTGAGE' },
+    });
+    const mortgageAccount = created.json<Account>();
+    const url = `${base}/${mortgageAccount.id}/mortgage`;
+
+    expect((await app.inject(url)).json()).toEqual({
+      terms: null,
+      prepayments: [],
+      projection: null,
+    });
+    expect(
+      (await app.inject({ method: 'POST', url: `${url}/prepayments`, payload: prepayment }))
+        .statusCode,
+    ).toBe(404);
+
+    const saved = await app.inject({ method: 'PUT', url, payload: terms });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({
+      terms: {
+        ...terms,
+        rateType: 'FIXED',
+        compounding: 'SEMI_ANNUAL',
+        paymentFrequency: 'MONTHLY',
+        paymentAmount: null,
+      },
+      prepayments: [],
+      projection: { payment: '2908.02', equity: expect.any(String) },
+    });
+
+    const added = await app.inject({
+      method: 'POST',
+      url: `${url}/prepayments`,
+      payload: prepayment,
+    });
+    expect(added.statusCode).toBe(201);
+    expect(added.json()).toMatchObject({ ...prepayment, accountId: mortgageAccount.id });
+    const projected = await app.inject(`${url}?asOf=2024-07-01`);
+    expect(projected.json()).toMatchObject({
+      prepayments: [{ amount: '20000.00' }],
+      projection: { asOf: '2024-07-01', prepaid: '20000.00' },
+    });
+    expect(Number(projected.json().projection.interestSaved)).toBeGreaterThan(0);
+
+    const updated = await app.inject({
+      method: 'PUT',
+      url,
+      payload: { ...terms, paymentFrequency: 'ACCELERATED_BIWEEKLY', annualRate: '4.79' },
+    });
+    expect(updated.json()).toMatchObject({
+      terms: { paymentFrequency: 'ACCELERATED_BIWEEKLY', annualRate: '4.79' },
+      prepayments: [{ amount: '20000.00' }],
+      projection: { periodsPerYear: 26 },
+    });
+    const moved = await app.inject({
+      method: 'PUT',
+      url,
+      payload: { ...terms, startDate: '2024-09-01' },
+    });
+    expect(moved.statusCode).toBe(409);
+
+    for (const payload of [
+      { ...terms, annualRate: '31' },
+      { ...terms, amortizationMonths: 0 },
+      { ...terms, paymentAmount: '100.00' },
+      { ...terms, unknown: true },
+    ]) {
+      expect((await app.inject({ method: 'PUT', url, payload })).statusCode).toBe(400);
+    }
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `${url}/prepayments`,
+          payload: { ...prepayment, date: '2023-12-31' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect((await app.inject(`${url}?asOf=bad`)).statusCode).toBe(400);
+
+    const prepaymentId = added.json<{ id: string }>().id;
+    expect(
+      (await app.inject({ method: 'DELETE', url: `${url}/prepayments/${prepaymentId}` }))
+        .statusCode,
+    ).toBe(204);
+    expect(
+      (await app.inject({ method: 'DELETE', url: `${url}/prepayments/${prepaymentId}` }))
+        .statusCode,
+    ).toBe(404);
+
+    const chequingAccount = (
+      await app.inject({
+        method: 'POST',
+        url: base,
+        payload: { name: 'Everyday', type: 'CHEQUING' },
+      })
+    ).json<Account>();
+    const chequing = `${base}/${chequingAccount.id}/mortgage`;
+    expect((await app.inject(chequing)).statusCode).toBe(409);
+    expect((await app.inject({ method: 'PUT', url: chequing, payload: terms })).statusCode).toBe(
+      409,
+    );
+    expect(
+      (await app.inject(`/households/${otherHousehold.id}/accounts/${mortgageAccount.id}/mortgage`))
+        .statusCode,
+    ).toBe(404);
+
+    if (!database) throw new Error('Database was not initialized');
+    await expect(
+      database.db.insert(mortgageTerms).values({
+        ...terms,
+        householdId: household.id,
+        accountId: chequingAccount.id,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      database.db.insert(mortgagePrepayments).values({
+        householdId: otherHousehold.id,
+        accountId: mortgageAccount.id,
+        amount: '1.00',
+        date: '2024-02-01',
+      }),
+    ).rejects.toThrow();
+  });
+
   it('reports an unavailable database without leaking connection details', async () => {
     const brokenDatabase = createDatabase({
       query: () => Promise.reject(new Error('unable to open /secret/path/studious.sqlite')),
@@ -304,6 +445,7 @@ describe('SQLite API integration', () => {
       expect(preflight.statusCode).toBe(204);
       expect(preflight.headers['access-control-allow-origin']).toBe('https://user.github.io');
       expect(preflight.headers['access-control-allow-methods']).toContain('PATCH');
+      expect(preflight.headers['access-control-allow-methods']).toContain('PUT');
       expect(preflight.headers['access-control-allow-credentials']).toBeUndefined();
       const health = await corsApp.inject({
         url: '/health',

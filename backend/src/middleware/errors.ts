@@ -12,7 +12,8 @@ export function registerErrorHandler(app: FastifyInstance) {
 
     if (error instanceof ApplicationError) {
       request.log.warn({ code: error.code }, error.message);
-      return reply.code(error.code === 'NOT_FOUND' ? 404 : 409).send({ error: error.message });
+      const status = { NOT_FOUND: 404, CONFLICT: 409, INVALID: 400 }[error.code];
+      return reply.code(status).send({ error: error.message });
     }
 
     // Drizzle wraps driver errors in a query error.

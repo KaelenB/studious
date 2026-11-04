@@ -10,11 +10,12 @@ the feature work.
 
 The [backend schema](../backend/src/models/schema.ts) currently implements `Household`,
 `Member`, `Account`, `BalanceSnapshot`, `ExpenseCategory`, and the one-off portion
-of `Expense`, plus `StatementArchive`, using Drizzle ORM and one central SQLite database owned by the API.
+of `Expense`, plus `StatementArchive`, `MortgageTerms`, and `Prepayment`, using Drizzle ORM and one central SQLite database owned by the API.
 These use UUID identifiers and two-place decimal-string amounts.
 The API accepts manual accounts and snapshots, plus positive dated expenses
-with optional household category/member attribution. Expense schedules,
-`recurrenceRuleId`, tags, and all other entities below remain design definitions,
+with optional household category/member attribution, and mortgage terms with
+prepayments whose amortization projection is computed on read. Expense schedules,
+`recurrenceRuleId` (including the mortgage payment rule), tags, and all other entities below remain design definitions,
 not implemented database tables. Expense entries do not alter account snapshots.
 See the [backend guide](../backend/README.md) for setup and supported endpoints.
 
@@ -187,37 +188,51 @@ one-off; recurring contributions reference a recurrence rule.
 
 ### MortgageTerms
 
-Mortgage-specific terms for a mortgage account. The mortgage payment schedule
-is represented by a recurrence rule, while payment amounts and amortization
-calculations are derived by the domain logic.
+Mortgage-specific terms for a mortgage account, stored in `mortgage_terms`.
+Payment amounts and the amortization schedule are derived by the pure domain
+module (`backend/src/domain/mortgage.ts`) and never stored. The periodic rate is
+`(1 + r/c)^(c/p) - 1` for `c` compounding periods and `p` payments per year.
+Accelerated frequencies pay the monthly payment divided by two (bi-weekly) or
+four (weekly). Calendar placement through a recurrence rule is still planned.
 
-| Field                    | Type           | Constraints / notes                                                   |
-| ------------------------ | -------------- | --------------------------------------------------------------------- |
-| `id`                     | ID             | Primary key                                                           |
-| `householdId`            | ID             | Required; references `Household`                                      |
-| `accountId`              | ID             | Required; unique; references a mortgage account in the same household |
-| `principal`              | Decimal money  | Required                                                              |
-| `annualInterestRate`     | Decimal rate   | Required                                                              |
-| `rateType`               | Enum           | `FIXED`, `VARIABLE`                                                   |
-| `compoundingFrequency`   | Enum / integer | Required; defaults to semi-annual                                     |
-| `amortizationMonths`     | Integer        | Required; greater than zero                                           |
-| `termMonths`             | Integer        | Required; greater than zero                                           |
-| `paymentFrequency`       | Enum           | `MONTHLY`, `BIWEEKLY`, `ACCELERATED_BIWEEKLY`, `WEEKLY`               |
-| `startDate`              | Date           | Required                                                              |
-| `recurrenceRuleId`       | ID?            | References the mortgage payment recurrence rule                       |
-| `createdAt`, `updatedAt` | Timestamp      | Required                                                              |
+`principal` and `startDate` describe the start of the current term; on renewal,
+enter the renewed balance, date, and remaining amortization. A composite foreign
+key on `(householdId, accountId, accountType)` with `accountType` fixed to
+`MORTGAGE` makes the database reject terms on any other account type.
+
+| Field                    | Type           | Constraints / notes                                                           |
+| ------------------------ | -------------- | ----------------------------------------------------------------------------- |
+| `id`                     | ID             | Primary key                                                                   |
+| `householdId`            | ID             | Required; references `Household`                                              |
+| `accountId`              | ID             | Required; unique; references a mortgage account in the same household         |
+| `principal`              | Decimal money  | Required                                                                      |
+| `annualRate`             | Decimal rate   | Required; percentage 0-30 with up to three decimals                           |
+| `rateType`               | Enum           | `FIXED`, `VARIABLE`; defaults to `FIXED`                                      |
+| `compounding`            | Enum           | `SEMI_ANNUAL` (default), `MONTHLY`                                            |
+| `amortizationMonths`     | Integer        | Required; 1-600                                                               |
+| `termMonths`             | Integer        | Required; 1-120                                                               |
+| `paymentFrequency`       | Enum           | `MONTHLY`, `BIWEEKLY`, `ACCELERATED_BIWEEKLY`, `WEEKLY`, `ACCELERATED_WEEKLY` |
+| `startDate`              | Date           | Required                                                                      |
+| `paymentAmount`          | Decimal money? | Lender's actual payment; null derives it from the terms                       |
+| `propertyValue`          | Decimal money? | Used for equity; null hides equity                                            |
+| `recurrenceRuleId`       | ID?            | Planned; references the mortgage payment recurrence rule                      |
+| `createdAt`, `updatedAt` | Timestamp      | Required                                                                      |
 
 ### Prepayment
 
-An additional payment against mortgage principal.
+An additional lump-sum payment against mortgage principal, stored in
+`mortgage_prepayments`. It is applied with the first regular payment on or after
+its date. Prepayments are planning inputs, so they are hard-deleted; the
+dated `BalanceSnapshot` history remains the financial record.
 
 | Field                    | Type          | Constraints / notes                                       |
 | ------------------------ | ------------- | --------------------------------------------------------- |
 | `id`                     | ID            | Primary key                                               |
 | `householdId`            | ID            | Required; references `Household`                          |
-| `mortgageTermsId`        | ID            | Required; references mortgage terms in the same household |
+| `accountId`              | ID            | Required; references mortgage terms in the same household |
 | `amount`                 | Decimal money | Required; greater than zero                               |
-| `date`                   | Date          | Required                                                  |
+| `date`                   | Date          | Required; on or after the terms' `startDate`              |
+| `note`                   | Text?         | Up to 200 characters                                      |
 | `createdAt`, `updatedAt` | Timestamp     | Required                                                  |
 
 ### IncomeStream

@@ -14,6 +14,12 @@ filesystem router are not needed yet.
 - Classify investment accounts by plan (TFSA, RRSP, FHSA, DCPP, and more); the
   sub-type shows beside the account type and can be changed with **Edit account**.
 - Record timestamped balance snapshots and page through their history.
+- Set up mortgage terms (rate, compounding, amortization, term, payment
+  frequency including accelerated, optional lender payment and property value)
+  and see the payment, balance today, equity, next payment split, renewal,
+  mortgage-free date, lifetime interest, a balance chart, and a yearly schedule.
+- Add or remove mortgage prepayments to see the interest they save, and record
+  the projected mortgage balance as a snapshot with one click.
 - View latest balances and recorded asset/debt/net-worth totals per currency.
 - Create expense categories and record one-off expenses with optional category/member.
 - Edit or archive expenses, filter by calendar month, and page through 20 rows at a time.
@@ -24,7 +30,7 @@ filesystem router are not needed yet.
 - Accessible labelled forms, keyboard focus, loading/empty/error states, and a
   responsive desktop/mobile layout.
 
-Income, recurring expenses, projections, mortgages, calendar, charts, and authentication
+Income, recurring expenses, investment projections, calendar, dashboard charts, and authentication
 are not implemented yet. These sections are not represented by fake data or
 nonfunctional navigation.
 

@@ -15,6 +15,13 @@
       "when": 1793805036281,
       "tag": "0001_investment_subtypes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793806615036,
+      "tag": "0002_mortgages",
+      "breakpoints": true
     }
   ]
 }

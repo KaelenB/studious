@@ -7,7 +7,7 @@ environment settings, or credentials.
 
 ## Use in this repository
 
-Both backend and frontend depend on `@studious/api` at version `0.7.0`. npm
+Both backend and frontend depend on `@studious/api` at version `0.8.0`. npm
 workspaces link the package locally during `npm ci`; nothing is published or
 downloaded from a private registry.
 
@@ -35,6 +35,14 @@ Accounts carry a nullable `subtype` classifying investment accounts by plan
 `NON_REGISTERED`). `addAccount` rejects a sub-type unless `type` is `INVESTMENT`;
 `updateAccount` accepts `subtype` (or `null` to clear) and the server answers 409
 for non-investment accounts. Responses from older servers parse with `subtype: null`.
+
+Mortgage accounts use `mortgage(householdId, accountId, asOf?, signal?)`,
+`saveMortgageTerms` (PUT, create or replace), `addPrepayment`, and
+`deletePrepayment`. `mortgage` returns `{ terms, prepayments, projection }`, where
+`terms` and `projection` are `null` until terms are saved. The exported
+`paymentFrequencies`, `compoundingFrequencies`, `rateTypes`, and `ratePattern`
+describe valid input; `MortgageTermsInput`, `MortgageProjection`, and `Prepayment`
+type the payloads. See the [API guide](../README.md#mortgages).
 
 The client also exposes `expenseCategories`, `addExpenseCategory`, `expenses`,
 `addExpense`, `updateExpense`, and `archiveExpense`. Expense requests and
@@ -95,7 +103,7 @@ npm pack --workspace @studious/api --pack-destination .
 ```
 
 The `prepack` hook builds JavaScript and `.d.ts` declarations. The resulting
-`studious-api-0.7.0.tgz` can be installed into a separate frontend project with
+`studious-api-0.8.0.tgz` can be installed into a separate frontend project with
 `npm install <path-to-tarball>`. Only compiled distribution files, package metadata,
 and this guide are included. `zod` is the sole runtime dependency. No registry
 publish step is performed by this project.

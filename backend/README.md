@@ -193,23 +193,27 @@ controllers, a dependency-injection container, or a second ORM abstraction.
 All routes accept/return JSON unless the response is `204`.
 `{householdId}` and `{accountId}` must be UUIDs.
 
-| Method     | Path                                                      | Purpose                                                                  |
-| ---------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
-| GET        | `/health`                                                 | Database readiness; `200` when connected, `503` otherwise                |
-| POST       | `/households`                                             | Create `{ "name": "Home", "defaultCurrency": "CAD" }`                    |
-| GET        | `/households/{householdId}`                               | Read household                                                           |
-| GET / POST | `/households/{householdId}/members`                       | List / create `{ "name": "Alex" }`                                       |
-| GET / POST | `/households/{householdId}/accounts`                      | List active / create account                                             |
-| GET        | `/households/{householdId}/accounts/{accountId}`          | Read active account                                                      |
-| PATCH      | `/households/{householdId}/accounts/{accountId}`          | Update `name`, nullable `memberId`, and/or nullable investment `subtype` |
-| DELETE     | `/households/{householdId}/accounts/{accountId}`          | Archive account; `204`                                                   |
-| GET        | `/households/{householdId}/accounts/{accountId}/balances` | Newest-first history; `limit` (1-500, default 100), `offset` (default 0) |
-| POST       | `/households/{householdId}/accounts/{accountId}/balances` | Append manual snapshot                                                   |
-| GET / POST | `/households/{householdId}/expense-categories`            | List / create category `{ "name": "Groceries" }`                         |
-| GET        | `/households/{householdId}/expenses?month=2026-01`        | Monthly active expenses, pagination, and full-month totals by currency   |
-| POST       | `/households/{householdId}/expenses`                      | Create one-off expense                                                   |
-| PATCH      | `/households/{householdId}/expenses/{expenseId}`          | Edit one or more expense input fields                                    |
-| DELETE     | `/households/{householdId}/expenses/{expenseId}`          | Archive expense; `204`                                                   |
+| Method     | Path                                                                                 | Purpose                                                                      |
+| ---------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| GET        | `/health`                                                                            | Database readiness; `200` when connected, `503` otherwise                    |
+| POST       | `/households`                                                                        | Create `{ "name": "Home", "defaultCurrency": "CAD" }`                        |
+| GET        | `/households/{householdId}`                                                          | Read household                                                               |
+| GET / POST | `/households/{householdId}/members`                                                  | List / create `{ "name": "Alex" }`                                           |
+| GET / POST | `/households/{householdId}/accounts`                                                 | List active / create account                                                 |
+| GET        | `/households/{householdId}/accounts/{accountId}`                                     | Read active account                                                          |
+| PATCH      | `/households/{householdId}/accounts/{accountId}`                                     | Update `name`, nullable `memberId`, and/or nullable investment `subtype`     |
+| DELETE     | `/households/{householdId}/accounts/{accountId}`                                     | Archive account; `204`                                                       |
+| GET        | `/households/{householdId}/accounts/{accountId}/balances`                            | Newest-first history; `limit` (1-500, default 100), `offset` (default 0)     |
+| POST       | `/households/{householdId}/accounts/{accountId}/balances`                            | Append manual snapshot                                                       |
+| GET / POST | `/households/{householdId}/expense-categories`                                       | List / create category `{ "name": "Groceries" }`                             |
+| GET        | `/households/{householdId}/expenses?month=2026-01`                                   | Monthly active expenses, pagination, and full-month totals by currency       |
+| POST       | `/households/{householdId}/expenses`                                                 | Create one-off expense                                                       |
+| PATCH      | `/households/{householdId}/expenses/{expenseId}`                                     | Edit one or more expense input fields                                        |
+| DELETE     | `/households/{householdId}/expenses/{expenseId}`                                     | Archive expense; `204`                                                       |
+| GET        | `/households/{householdId}/accounts/{accountId}/mortgage?asOf=2026-01-31`            | Terms, prepayments, and amortization projection (all `null`/empty until set) |
+| PUT        | `/households/{householdId}/accounts/{accountId}/mortgage`                            | Create or replace mortgage terms; returns the mortgage                       |
+| POST       | `/households/{householdId}/accounts/{accountId}/mortgage/prepayments`                | Add a lump-sum prepayment `{ "amount", "date", "note" }`; `201`              |
+| DELETE     | `/households/{householdId}/accounts/{accountId}/mortgage/prepayments/{prepaymentId}` | Delete a prepayment; `204`                                                   |
 
 ### One-off expenses
 
@@ -232,6 +236,32 @@ Category names are trimmed and unique within each household (case-sensitive).
 Cross-household member/category references are rejected by composite foreign
 keys. Category rename/delete, recurrence rules, payment status, and tags are not
 implemented. Recording or archiving an expense does not change account balances.
+
+### Mortgages
+
+Mortgage routes accept only `MORTGAGE` accounts (other types return `409`). Terms
+are `{ "principal": "500000.00", "annualRate": "4.79", "rateType": "FIXED",
+"compounding": "SEMI_ANNUAL", "amortizationMonths": 300, "termMonths": 60,
+"paymentFrequency": "ACCELERATED_BIWEEKLY", "startDate": "2024-01-15",
+"paymentAmount": null, "propertyValue": "800000.00" }`. `rateType`,
+`compounding` (`SEMI_ANNUAL` or `MONTHLY`), and `paymentFrequency` (`MONTHLY`,
+`BIWEEKLY`, `ACCELERATED_BIWEEKLY`, `WEEKLY`, `ACCELERATED_WEEKLY`) have the
+defaults shown first. `paymentAmount` overrides the calculated payment with the
+lender's figure; `propertyValue` enables equity. Use the principal and start date
+of the current term; on renewal, replace them with the renewed balance, date, and
+remaining amortization.
+
+The projection is computed on every read by the pure
+[`domain/mortgage.ts`](src/domain/mortgage.ts) module in integer cents. It returns the
+regular and calculated payment, balance and equity as of `asOf` (default: today,
+UTC), interest/principal/prepayments to date, the next payment split, renewal
+date and balance, payoff date, payments remaining, lifetime interest, a
+no-prepayment baseline with `interestSaved`, and calendar-year totals. Terms
+whose payment never repays the loan (or takes over 100 years) return `400`.
+Prepayments must be dated on or after `startDate`, and moving `startDate` after
+an existing prepayment returns `409`. Prepayments are hard-deleted planning
+inputs. Migration `0002_mortgages` only creates tables and indexes, so it
+leaves existing data untouched.
 
 Create a household and account, then record a balance:
 

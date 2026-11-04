@@ -21,6 +21,7 @@
     type Snapshot,
   } from '../lib/api';
   import { cents, formatMoney, localDateTime } from '../lib/money';
+  import Mortgage from './Mortgage.svelte';
   import Statements from './Statements.svelte';
   let {
     account,
@@ -113,6 +114,12 @@
     }
   }
 
+  async function recordProjected(projected: string, observedAt: string) {
+    await onrecord(projected, observedAt);
+    offset = 0;
+    historyVersion++;
+  }
+
   async function importStatement(file: File, statementDate?: string) {
     busy = true;
     try {
@@ -138,6 +145,9 @@
       <Button color="link" on:click={() => historyVersion++}>Retry history</Button>
     </Alert>{/if}
   {#if notice}<Alert color="success" fade={false}>{notice}</Alert>{/if}
+  {#if account.type === 'MORTGAGE'}
+    <Mortgage {account} disabled={busy} onrecord={recordProjected} />
+  {/if}
   <Form on:submit={record}>
     <h3>Record a balance</h3>
     <p class="muted small">

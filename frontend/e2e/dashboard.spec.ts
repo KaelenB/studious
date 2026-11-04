@@ -408,3 +408,63 @@ test('reviews a Sun Life PDF before saving a snapshot and downloading its origin
     true,
   );
 });
+
+test('sets up mortgage terms, projects amortization and tracks prepayments', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  const home = await (
+    await page.request.post('/api/households', { data: { name: 'Mortgage browser home' } })
+  ).json();
+  await page.request.post(`/api/households/${home.id}/accounts`, {
+    data: { name: 'Home mortgage', type: 'MORTGAGE' },
+  });
+  await page.addInitScript((id) => localStorage.setItem('studious.householdId', id), home.id);
+  await page.goto('/');
+  await page.getByRole('button', { name: /Home mortgage.*No balance yet/ }).click();
+  const mortgage = page.getByRole('region', { name: 'Mortgage', exact: true });
+  await expect(mortgage.getByRole('heading', { name: 'Set up mortgage terms' })).toBeVisible();
+  await mortgage.getByLabel('Principal (CAD)').fill('500000.00');
+  await mortgage.getByLabel('Annual rate (%)').fill('5');
+  await mortgage.getByLabel('Start date').fill('2024-01-15');
+  await mortgage.getByLabel('Amortization (years)').fill('25');
+  await mortgage.getByLabel('Property value (optional)').fill('800000.00');
+  await mortgage.getByRole('button', { name: 'Save mortgage terms' }).click();
+  await expect(
+    mortgage.getByRole('alert').filter({ hasText: 'Mortgage terms saved.' }),
+  ).toBeVisible();
+  await expect(mortgage.locator('.mortgage-stat').first()).toContainText('Monthly payment');
+  await expect(mortgage.locator('.mortgage-stat').first()).toContainText('2,908.02');
+  await expect(mortgage).toContainText('Home equity');
+  await expect(mortgage.getByRole('img', { name: /Balance declines/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+
+  await mortgage.getByLabel('Amount (CAD)').fill('20000.00');
+  await mortgage.getByLabel('Date', { exact: true }).fill('2024-06-01');
+  await mortgage.getByLabel('Note (optional)').fill('Bonus');
+  await mortgage.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(mortgage.getByRole('cell', { name: 'Bonus' })).toBeVisible();
+  await expect(mortgage).toContainText('Saved by prepaying');
+  await mortgage.getByText('Yearly amortization schedule').click();
+  await expect(mortgage.getByRole('cell', { name: '2024', exact: true })).toBeVisible();
+
+  await mortgage.getByRole('button', { name: 'Record projected balance' }).click();
+  await expect(
+    mortgage.getByRole('alert').filter({ hasText: 'Recorded the projected balance' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: /Home mortgage.*CAD/ })).toBeVisible();
+
+  await mortgage.getByRole('button', { name: /Remove .* prepayment/ }).click();
+  await expect(
+    mortgage.getByRole('alert').filter({ hasText: 'Prepayment removed.' }),
+  ).toBeVisible();
+  await expect(mortgage).not.toContainText('Saved by prepaying');
+
+  await mortgage.getByRole('button', { name: 'Edit terms' }).click();
+  await mortgage.getByLabel('Payment frequency').selectOption('ACCELERATED_BIWEEKLY');
+  await mortgage.getByRole('button', { name: 'Save mortgage terms' }).click();
+  await expect(mortgage).toContainText('Accelerated bi-weekly payment');
+  await expect(mortgage).toContainText('1,454.01');
+  expect(pageErrors).toEqual([]);
+});

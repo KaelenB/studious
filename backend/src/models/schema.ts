@@ -2,7 +2,10 @@ import { sql } from 'drizzle-orm';
 import {
   accountTypes,
   balanceSources,
+  compoundingFrequencies,
   investmentSubtypes,
+  paymentFrequencies,
+  rateTypes,
   type StatementInvestment,
   type StatementPreview,
 } from '@studious/api';
@@ -88,6 +91,7 @@ export const accounts = sqliteTable(
   },
   (table) => [
     unique('accounts_household_id_id_unique').on(table.householdId, table.id),
+    unique('accounts_household_id_type_unique').on(table.householdId, table.id, table.type),
     foreignKey({
       name: 'accounts_member_household_fk',
       columns: [table.householdId, table.memberId],
@@ -262,3 +266,108 @@ export const statementArchives = sqliteTable(
     ),
   ],
 );
+
+const dateCheck = (name: string, column: unknown) =>
+  check(name, sql`date(${column}) IS ${column} AND ${column} >= '1000-01-01'`);
+const positiveCheck = (name: string, column: unknown) =>
+  check(name, sql`CAST(${column} AS REAL) > 0`);
+
+/** One set of amortization terms per mortgage account; only MORTGAGE accounts can reference it. */
+export const mortgageTerms = sqliteTable(
+  'mortgage_terms',
+  {
+    id: id(),
+    householdId: text('household_id').notNull(),
+    accountId: text('account_id').notNull(),
+    accountType: text('account_type', { enum: ['MORTGAGE'] })
+      .notNull()
+      .default('MORTGAGE'),
+    principal: money('principal'),
+    annualRate: text('annual_rate').notNull(),
+    rateType: text('rate_type', { enum: rateTypes }).notNull().default('FIXED'),
+    compounding: text('compounding', { enum: compoundingFrequencies })
+      .notNull()
+      .default('SEMI_ANNUAL'),
+    amortizationMonths: integer('amortization_months').notNull(),
+    termMonths: integer('term_months').notNull(),
+    paymentFrequency: text('payment_frequency', { enum: paymentFrequencies })
+      .notNull()
+      .default('MONTHLY'),
+    startDate: text('start_date').notNull(),
+    paymentAmount: text('payment_amount'),
+    propertyValue: text('property_value'),
+    ...timestamps(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'mortgage_terms_account_fk',
+      columns: [table.householdId, table.accountId, table.accountType],
+      foreignColumns: [accounts.householdId, accounts.id, accounts.type],
+    }),
+    unique('mortgage_terms_account_unique').on(table.accountId),
+    unique('mortgage_terms_household_account_unique').on(table.householdId, table.accountId),
+    check('mortgage_terms_account_type_valid', sql`${table.accountType} = 'MORTGAGE'`),
+    moneyCheck('mortgage_terms_principal_format', table.principal),
+    positiveCheck('mortgage_terms_principal_positive', table.principal),
+    check(
+      'mortgage_terms_rate_valid',
+      sql`${table.annualRate} GLOB '[0-9]*' AND CAST(${table.annualRate} AS REAL) BETWEEN 0 AND 30`,
+    ),
+    check('mortgage_terms_rate_type_valid', sql`${table.rateType} IN (${inList(rateTypes)})`),
+    check(
+      'mortgage_terms_compounding_valid',
+      sql`${table.compounding} IN (${inList(compoundingFrequencies)})`,
+    ),
+    check(
+      'mortgage_terms_frequency_valid',
+      sql`${table.paymentFrequency} IN (${inList(paymentFrequencies)})`,
+    ),
+    check('mortgage_terms_amortization_valid', sql`${table.amortizationMonths} BETWEEN 1 AND 600`),
+    check('mortgage_terms_term_valid', sql`${table.termMonths} BETWEEN 1 AND 120`),
+    dateCheck('mortgage_terms_start_date_format', table.startDate),
+    check(
+      'mortgage_terms_payment_valid',
+      sql`${table.paymentAmount} IS NULL OR (${table.paymentAmount} GLOB '*[0-9].[0-9][0-9]' AND CAST(${table.paymentAmount} AS REAL) > 0)`,
+    ),
+    check(
+      'mortgage_terms_property_value_valid',
+      sql`${table.propertyValue} IS NULL OR (${table.propertyValue} GLOB '*[0-9].[0-9][0-9]' AND CAST(${table.propertyValue} AS REAL) > 0)`,
+    ),
+  ],
+);
+
+/** Planned or completed lump-sum payments. These are planning inputs, so deletes are hard. */
+export const mortgagePrepayments = sqliteTable(
+  'mortgage_prepayments',
+  {
+    id: id(),
+    householdId: text('household_id').notNull(),
+    accountId: text('account_id').notNull(),
+    amount: money('amount'),
+    date: text('date').notNull(),
+    note: text('note'),
+    ...timestamps(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'mortgage_prepayments_terms_fk',
+      columns: [table.householdId, table.accountId],
+      foreignColumns: [mortgageTerms.householdId, mortgageTerms.accountId],
+    }),
+    moneyCheck('mortgage_prepayments_amount_format', table.amount),
+    positiveCheck('mortgage_prepayments_amount_positive', table.amount),
+    dateCheck('mortgage_prepayments_date_format', table.date),
+    check(
+      'mortgage_prepayments_note_length',
+      sql`${table.note} IS NULL OR length(${table.note}) <= 200`,
+    ),
+    index('mortgage_prepayments_account_date_idx').on(
+      table.householdId,
+      table.accountId,
+      table.date,
+    ),
+  ],
+);
+
+export type MortgageTermsRow = typeof mortgageTerms.$inferSelect;
+export type MortgagePrepaymentRow = typeof mortgagePrepayments.$inferSelect;

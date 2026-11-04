@@ -62,6 +62,46 @@ describe('distributed client over HTTP', () => {
     await expect(api.balances(household.id, account.id)).rejects.toMatchObject({ status: 404 });
   });
 
+  it('manages mortgage terms and prepayments through the SDK', async () => {
+    const home = await api.createHousehold('Mortgage home', 'CAD');
+    const account = await api.addAccount(home.id, { name: 'Mortgage', type: 'MORTGAGE' });
+    expect(await api.mortgage(home.id, account.id)).toEqual({
+      terms: null,
+      prepayments: [],
+      projection: null,
+    });
+    const saved = await api.saveMortgageTerms(home.id, account.id, {
+      principal: '400000.00',
+      annualRate: '4.5',
+      amortizationMonths: 300,
+      termMonths: 60,
+      paymentFrequency: 'ACCELERATED_BIWEEKLY',
+      startDate: '2025-03-01',
+    });
+    expect(saved.terms).toMatchObject({ compounding: 'SEMI_ANNUAL', rateType: 'FIXED' });
+    const prepayment = await api.addPrepayment(home.id, account.id, {
+      amount: '10000.00',
+      date: '2025-12-01',
+    });
+    expect(prepayment.note).toBeNull();
+    const projected = await api.mortgage(home.id, account.id, '2026-01-01');
+    expect(projected.prepayments).toEqual([prepayment]);
+    expect(projected.projection).toMatchObject({ asOf: '2026-01-01', prepaid: '10000.00' });
+    await api.deletePrepayment(home.id, account.id, prepayment.id);
+    expect((await api.mortgage(home.id, account.id)).prepayments).toEqual([]);
+    expect(() => api.mortgage(home.id, account.id, 'not-a-date')).toThrow();
+    await expect(
+      api.saveMortgageTerms(home.id, account.id, {
+        principal: '400000.00',
+        annualRate: '4.5',
+        amortizationMonths: 300,
+        termMonths: 60,
+        startDate: '2025-03-01',
+        paymentAmount: '1.00',
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
   it('tracks categorized expenses with edits, calendar dates and soft archives through the SDK', async () => {
     const home = await api.createHousehold('Spending home', 'CAD');
     const member = await api.addMember(home.id, 'Alex');
