@@ -207,7 +207,7 @@
 <svelte:head
   ><title>Studious | Household finances</title><meta
     name="description"
-    content="A clear, local-first view of your household accounts and balance history."
+    content="A clear, shared view of your household accounts, balances and expenses."
   /></svelte:head
 >
 
@@ -226,13 +226,13 @@
         ><a href="#household"><span aria-hidden="true">◎</span> Household</a>{/if}
     </nav>
     <div class="sidebar-bottom">
-      <span class="status-dot"></span> Local workspace
+      <span class="status-dot"></span> Shared workspace
       <p>Your data. Your household.</p>
     </div>
   </aside>
   <div class="workspace">
     <header class="topbar">
-      <span>Household finance dashboard</span><span class="local-tag">LOCAL PREVIEW</span>
+      <span>Household finance dashboard</span><span class="env-tag">PREVIEW</span>
     </header>
     <main id="main">
       {#if storageWarning}<Alert color="warning" fade={false}>{storageWarning}</Alert>{/if}

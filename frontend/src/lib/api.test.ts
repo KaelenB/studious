@@ -16,7 +16,7 @@ it('explains where a hosted build expects the API when it is unreachable', () =>
   const offline = new Error('Cannot reach the backend. Check that the API is running.');
   expect(errorMessage(offline, '/api')).toBe(offline.message);
   expect(errorMessage(offline, 'http://127.0.0.1:3000', 'https://kaelenb.github.io')).toBe(
-    'Cannot reach the Studious API at http://127.0.0.1:3000. Start it on this computer with CORS_ORIGINS set to https://kaelenb.github.io.',
+    'Cannot reach the Studious API at http://127.0.0.1:3000. Check that it is running and reachable from this device, and that its CORS_ORIGINS includes https://kaelenb.github.io.',
   );
   expect(errorMessage('nope')).toBe('Something went wrong. Please try again.');
 });

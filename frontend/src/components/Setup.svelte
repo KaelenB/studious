@@ -103,7 +103,7 @@
     </div>
   {/if}
   <p class="fineprint">
-    Local-only preview. Household IDs are not passwords or access controls. Authentication is not
-    yet available.
+    Preview. Data is stored in the shared Studious database. Household IDs are not passwords or
+    access controls, and authentication is not yet available.
   </p>
 </section>

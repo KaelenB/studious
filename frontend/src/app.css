@@ -207,7 +207,7 @@ nav a span {
   font-size: 0.78rem;
   background: #fff9;
 }
-.local-tag {
+.env-tag {
   font-size: 0.6rem;
   letter-spacing: 1px;
   background: #edf1e9;
@@ -719,7 +719,7 @@ footer {
   h1 {
     letter-spacing: -0.8px;
   }
-  .local-tag {
+  .env-tag {
     font-size: 0.5rem;
   }
 }

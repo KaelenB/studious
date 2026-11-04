@@ -170,8 +170,8 @@
   <h3>Investment statement import</h3>
   <p class="muted small">
     Upload a Canadian Sun Life PDF (up to 25 pages) or Questrade InvestmentSummary XLSX (one
-    account), up to 10 MiB. Review balances and investments before saving. Parsing stays local.
-    Scans and encrypted files are not supported.
+    account), up to 10 MiB. Review balances and investments before saving. Files are parsed by your
+    Studious server, never a third-party service. Scans and encrypted files are not supported.
   </p>
   {#if error}<Alert color="danger" fade={false}>{error}</Alert>{/if}
   {#if notice}<Alert color="success" fade={false}>{notice}</Alert>{/if}

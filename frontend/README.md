@@ -47,7 +47,8 @@ The frontend container runs unprivileged nginx and proxies `/api` to the API;
 no permissive CORS configuration is needed. Stop it with `docker compose down`;
 the database volume remains.
 
-All ports bind to loopback. This is a local-only, unauthenticated application.
+All ports bind to loopback. The application is not authenticated yet, so expose
+the API only behind an access layer you control.
 Household IDs are not access controls. Keep the ID if browser storage is cleared;
 household discovery is not available.
 

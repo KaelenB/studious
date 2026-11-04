@@ -32,9 +32,9 @@ export function errorMessage(
   origin = globalThis.location?.origin ?? 'this site',
 ) {
   if (!(error instanceof Error)) return 'Something went wrong. Please try again.';
-  // Hosted builds (e.g. GitHub Pages) call an API on the visitor's computer; say where.
+  // Hosted builds (e.g. GitHub Pages) call the central API by absolute URL; say which one.
   if (error.message.startsWith('Cannot reach the backend') && /^https?:\/\//.test(baseUrl)) {
-    return `Cannot reach the Studious API at ${baseUrl}. Start it on this computer with CORS_ORIGINS set to ${origin}.`;
+    return `Cannot reach the Studious API at ${baseUrl}. Check that it is running and reachable from this device, and that its CORS_ORIGINS includes ${origin}.`;
   }
   return error.message;
 }

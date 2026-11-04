@@ -1,7 +1,8 @@
 {
   "name": "@studious/frontend",
+  "version": "0.1.0",
+  "description": "Svelte 5 + Sveltestrap household finance dashboard for the central Studious API",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "engines": {
     "node": ">=22.22"
@@ -19,20 +20,20 @@
     "pretest:e2e": "npm run build --workspace @studious/api",
     "test:e2e": "playwright test"
   },
-  "devDependencies": {
-    "@playwright/test": "1.64.1",
-    "@sveltejs/vite-plugin-svelte": "^7.3.1",
-    "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^24.19.2",
-    "svelte": "^5.57.2",
-    "svelte-check": "^4.7.7",
-    "typescript": "~6.0.3",
-    "vite": "^8.3.5",
-    "vitest": "5.1.0"
-  },
   "dependencies": {
     "@studious/api": "0.6.0",
     "@sveltestrap/sveltestrap": "7.1.0",
     "bootstrap": "5.3.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@tsconfig/svelte": "5.0.8",
+    "@types/node": "22.20.5",
+    "svelte": "5.57.3",
+    "svelte-check": "4.7.8",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
   }
 }
