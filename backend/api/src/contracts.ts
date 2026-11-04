@@ -9,28 +9,54 @@ export const accountTypes = [
   'MORTGAGE',
 ] as const;
 export const balanceSources = ['MANUAL', 'PROJECTED', 'INTEGRATED'] as const;
+/** Canadian plan kinds for `INVESTMENT` accounts; `null` means unspecified. */
+export const investmentSubtypes = [
+  'TFSA',
+  'RRSP',
+  'SPOUSAL_RRSP',
+  'GROUP_RRSP',
+  'FHSA',
+  'RESP',
+  'RDSP',
+  'RRIF',
+  'LIRA',
+  'LIF',
+  'DCPP',
+  'DBPP',
+  'DPSP',
+  'NON_REGISTERED',
+] as const;
 export const moneyPattern = /^-?(?:0|[1-9]\d{0,11})\.\d{2}$/;
 const name = z.string().trim().min(1).max(200);
 const currency = z.string().regex(/^[A-Z]{3}$/, 'Use a three-letter uppercase currency code');
 const timestamps = { createdAt: z.iso.datetime(), updatedAt: z.iso.datetime() };
 const source = z.enum(balanceSources);
+const subtype = z.enum(investmentSubtypes).nullable();
+const subtypeMessage = 'Only investment accounts can have a sub-type';
 
 export const householdBody = z.strictObject({
   name,
   defaultCurrency: currency.default('CAD'),
 });
 export const memberBody = z.strictObject({ name });
-export const accountBody = z.strictObject({
-  name,
-  type: z.enum(accountTypes),
-  currency: currency.default('CAD'),
-  memberId: z.uuid().nullable().optional(),
-  balanceSource: z.literal('MANUAL').default('MANUAL'),
-});
+export const accountBody = z
+  .strictObject({
+    name,
+    type: z.enum(accountTypes),
+    subtype: subtype.optional(),
+    currency: currency.default('CAD'),
+    memberId: z.uuid().nullable().optional(),
+    balanceSource: z.literal('MANUAL').default('MANUAL'),
+  })
+  .refine((value) => value.subtype == null || value.type === 'INVESTMENT', {
+    message: subtypeMessage,
+    path: ['subtype'],
+  });
 export const accountUpdateBody = z
   .strictObject({
     name: name.optional(),
     memberId: z.uuid().nullable().optional(),
+    subtype: subtype.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
 export const snapshotBody = z.strictObject({
@@ -62,6 +88,8 @@ export const accountSchema = z.object({
   memberId: z.uuid().nullable(),
   name: z.string(),
   type: z.enum(accountTypes),
+  // Defaults keep clients compatible with API builds that predate sub-types.
+  subtype: subtype.default(null),
   currency: z.string(),
   balanceSource: source,
   deletedAt: z.iso.datetime().nullable(),
@@ -89,6 +117,7 @@ export type Storage = z.infer<typeof storageSchema>;
 export type Household = z.infer<typeof householdSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type Account = z.infer<typeof accountSchema>;
+export type InvestmentSubtype = (typeof investmentSubtypes)[number];
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type HouseholdInput = z.input<typeof householdBody>;
 export type MemberInput = z.input<typeof memberBody>;

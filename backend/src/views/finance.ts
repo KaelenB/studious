@@ -38,6 +38,7 @@ export function accountView(model: Account): AccountResponse {
     memberId: model.memberId,
     name: model.name,
     type: model.type,
+    subtype: model.subtype,
     currency: model.currency,
     balanceSource: model.balanceSource,
     deletedAt: model.deletedAt?.toISOString() ?? null,

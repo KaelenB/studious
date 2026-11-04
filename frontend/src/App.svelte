@@ -17,7 +17,7 @@
   import StorageMeter from './components/StorageMeter.svelte';
   import {
     api,
-    accountLabels,
+    accountKind,
     errorMessage,
     type Household,
     type Member,
@@ -142,6 +142,7 @@
           ? await api.updateAccount(household.id, selected.id, {
               name: input.name,
               memberId: input.memberId,
+              ...(selected.type === 'INVESTMENT' ? { subtype: input.subtype ?? null } : {}),
             })
           : await api.addAccount(household.id, input);
       form = null;
@@ -348,7 +349,7 @@
                   >
                   <span class="account-info"
                     ><strong>{account.name}</strong><span
-                      >{accountLabels[account.type]} · {members.find(
+                      >{accountKind(account)} · {members.find(
                         (member) => member.id === account.memberId,
                       )?.name ?? 'Shared household'}</span
                     ></span

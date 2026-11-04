@@ -1,7 +1,13 @@
-import { createApiClient, type Account, type Snapshot } from '@studious/api';
+import {
+  createApiClient,
+  type Account,
+  type InvestmentSubtype,
+  type Snapshot,
+} from '@studious/api';
 
 export {
   accountTypes,
+  investmentSubtypes,
   moneyPattern,
   ApiError,
   type Household,
@@ -9,6 +15,7 @@ export {
   type Account,
   type Snapshot,
   type AccountInput,
+  type InvestmentSubtype,
 } from '@studious/api';
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -23,6 +30,45 @@ export const accountLabels: Record<Account['type'], string> = {
   LOAN: 'Loan',
   MORTGAGE: 'Mortgage',
 };
+
+export const subtypeLabels: Record<InvestmentSubtype, string> = {
+  TFSA: 'TFSA',
+  RRSP: 'RRSP',
+  SPOUSAL_RRSP: 'Spousal RRSP',
+  GROUP_RRSP: 'Group RRSP',
+  FHSA: 'FHSA',
+  RESP: 'RESP',
+  RDSP: 'RDSP',
+  RRIF: 'RRIF',
+  LIRA: 'LIRA',
+  LIF: 'LIF',
+  DCPP: 'DCPP',
+  DBPP: 'DBPP',
+  DPSP: 'DPSP',
+  NON_REGISTERED: 'Non-registered',
+};
+
+export const subtypeDescriptions: Record<InvestmentSubtype, string> = {
+  TFSA: 'Tax-Free Savings Account',
+  RRSP: 'Registered Retirement Savings Plan',
+  SPOUSAL_RRSP: 'Spousal RRSP',
+  GROUP_RRSP: 'Group RRSP (workplace)',
+  FHSA: 'First Home Savings Account',
+  RESP: 'Registered Education Savings Plan',
+  RDSP: 'Registered Disability Savings Plan',
+  RRIF: 'Registered Retirement Income Fund',
+  LIRA: 'Locked-In Retirement Account',
+  LIF: 'Life Income Fund',
+  DCPP: 'Defined Contribution Pension Plan',
+  DBPP: 'Defined Benefit Pension Plan',
+  DPSP: 'Deferred Profit Sharing Plan',
+  NON_REGISTERED: 'Non-registered (taxable)',
+};
+
+export function accountKind(account: Pick<Account, 'type' | 'subtype'>) {
+  const base = accountLabels[account.type];
+  return account.subtype ? `${base} \u00b7 ${subtypeLabels[account.subtype]}` : base;
+}
 
 export type AccountSummary = { account: Account; latest: Snapshot | null };
 

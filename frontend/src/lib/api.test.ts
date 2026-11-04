@@ -1,6 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { api, accountLabels, errorMessage } from './api';
-import { accountTypes } from '@studious/api';
+import {
+  api,
+  accountKind,
+  accountLabels,
+  errorMessage,
+  subtypeDescriptions,
+  subtypeLabels,
+} from './api';
+import { accountTypes, investmentSubtypes } from '@studious/api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -10,6 +17,16 @@ it('configures the distributed backend client for the same-origin proxy', async 
   expect(await api.health()).toEqual({ status: 'ok', database: 'ok' });
   expect(fetch).toHaveBeenCalledWith('/api/health', expect.any(Object));
   expect(Object.keys(accountLabels)).toEqual([...accountTypes]);
+});
+
+it('labels every investment sub-type and combines it with the account type', () => {
+  expect(Object.keys(subtypeLabels)).toEqual([...investmentSubtypes]);
+  expect(Object.keys(subtypeDescriptions)).toEqual([...investmentSubtypes]);
+  expect(accountKind({ type: 'INVESTMENT', subtype: 'DCPP' })).toBe('Investment \u00b7 DCPP');
+  expect(accountKind({ type: 'INVESTMENT', subtype: 'NON_REGISTERED' })).toBe(
+    'Investment \u00b7 Non-registered',
+  );
+  expect(accountKind({ type: 'SAVINGS', subtype: null })).toBe('Savings');
 });
 
 it('explains where a hosted build expects the API when it is unreachable', () => {

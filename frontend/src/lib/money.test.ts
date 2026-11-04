@@ -10,6 +10,7 @@ function summary(type: Account['type'], amount: string | null, currency = 'CAD')
       householdId: 'home',
       name: 'Bank',
       type,
+      subtype: null,
       currency,
       memberId: null,
       balanceSource: 'MANUAL',

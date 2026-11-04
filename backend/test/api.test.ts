@@ -217,6 +217,55 @@ describe('SQLite API integration', () => {
     ).toHaveLength(2);
   });
 
+  it('classifies investment accounts by registered plan sub-type', async () => {
+    const base = `/households/${household.id}/accounts`;
+    const created = await app.inject({
+      method: 'POST',
+      url: base,
+      payload: { name: 'Pension', type: 'INVESTMENT', subtype: 'DCPP' },
+    });
+    expect(created.statusCode).toBe(201);
+    const pension = created.json<Account>();
+    expect(pension).toMatchObject({ type: 'INVESTMENT', subtype: 'DCPP' });
+    const url = `${base}/${pension.id}`;
+    const updated = await app.inject({ method: 'PATCH', url, payload: { subtype: 'TFSA' } });
+    expect(updated.json()).toMatchObject({ subtype: 'TFSA' });
+    const cleared = await app.inject({ method: 'PATCH', url, payload: { subtype: null } });
+    expect(cleared.json()).toMatchObject({ subtype: null });
+
+    const bank = await app.inject({
+      method: 'POST',
+      url: base,
+      payload: { name: 'Savings', type: 'SAVINGS' },
+    });
+    expect(bank.json()).toMatchObject({ subtype: null });
+    for (const payload of [
+      { name: 'Bad', type: 'SAVINGS', subtype: 'TFSA' },
+      { name: 'Bad', type: 'INVESTMENT', subtype: 'CRYPTO' },
+    ]) {
+      expect((await app.inject({ method: 'POST', url: base, payload })).statusCode).toBe(400);
+    }
+    const bankUrl = `${base}/${bank.json<Account>().id}`;
+    const rejected = await app.inject({
+      method: 'PATCH',
+      url: bankUrl,
+      payload: { subtype: 'TFSA' },
+    });
+    expect(rejected.statusCode).toBe(409);
+    expect(rejected.json()).toEqual({ error: 'Only investment accounts can have a sub-type' });
+
+    if (!database) throw new Error('Database was not initialized');
+    await expect(
+      database.db
+        .update(accounts)
+        .set({ subtype: 'RRSP' })
+        .where(eq(accounts.id, bank.json<Account>().id)),
+    ).rejects.toThrow();
+    for (const target of [url, bankUrl]) {
+      expect((await app.inject({ method: 'DELETE', url: target })).statusCode).toBe(204);
+    }
+  });
+
   it('reports an unavailable database without leaking connection details', async () => {
     const brokenDatabase = createDatabase({
       query: () => Promise.reject(new Error('unable to open /secret/path/studious.sqlite')),

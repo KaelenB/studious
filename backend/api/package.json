@@ -1,6 +1,6 @@
 {
   "name": "@studious/api",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Backend-owned HTTP client and API contracts for Studious",
   "type": "module",
   "engines": {

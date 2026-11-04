@@ -181,7 +181,8 @@ controllers, a dependency-injection container, or a second ORM abstraction.
   it themselves.
 - Accounts are soft-deleted; balance snapshots have no update/delete endpoints.
 - Account type, currency, and balance source cannot be patched. This avoids
-  reinterpreting historical balances. Only the manual source is accepted by
+  reinterpreting historical balances. An investment account's `subtype` can be
+  set, changed, or cleared (`null`); other account types answer `409`. Only the manual source is accepted by
   the initial API.
 - Constraint conflicts return `409`; invalid input returns `400`; missing
   resources return `404`. Unexpected errors are logged and return a generic
@@ -200,7 +201,7 @@ All routes accept/return JSON unless the response is `204`.
 | GET / POST | `/households/{householdId}/members`                       | List / create `{ "name": "Alex" }`                                       |
 | GET / POST | `/households/{householdId}/accounts`                      | List active / create account                                             |
 | GET        | `/households/{householdId}/accounts/{accountId}`          | Read active account                                                      |
-| PATCH      | `/households/{householdId}/accounts/{accountId}`          | Update `name` and/or nullable `memberId`                                 |
+| PATCH      | `/households/{householdId}/accounts/{accountId}`          | Update `name`, nullable `memberId`, and/or nullable investment `subtype` |
 | DELETE     | `/households/{householdId}/accounts/{accountId}`          | Archive account; `204`                                                   |
 | GET        | `/households/{householdId}/accounts/{accountId}/balances` | Newest-first history; `limit` (1-500, default 100), `offset` (default 0) |
 | POST       | `/households/{householdId}/accounts/{accountId}/balances` | Append manual snapshot                                                   |
@@ -248,7 +249,13 @@ Invoke-RestMethod "$base/accounts/$($account.id)/balances" `
 
 Save the returned household ID; household discovery and authentication are not
 implemented yet. Account types are `CHEQUING`, `SAVINGS`, `INVESTMENT`, `CREDIT`,
-`LOAN`, and `MORTGAGE`. Negative balances are allowed; signed amounts are not
+`LOAN`, and `MORTGAGE`. Investment accounts accept an optional `subtype`:
+`TFSA`, `RRSP`, `SPOUSAL_RRSP`, `GROUP_RRSP`, `FHSA`, `RESP`, `RDSP`, `RRIF`,
+`LIRA`, `LIF`, `DCPP`, `DBPP`, `DPSP`, or `NON_REGISTERED`, for example
+`{"name":"Pension","type":"INVESTMENT","subtype":"DCPP"}`. Sending a sub-type
+for any other type returns `400`. Migration `0001_investment_subtypes` adds the
+column with a hand-written `ALTER TABLE` so existing accounts keep their history
+and start with `subtype: null`. Negative balances are allowed; signed amounts are not
 automatically normalized by account type.
 
 ## Sun Life PDF imports

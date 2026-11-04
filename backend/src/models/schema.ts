@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   accountTypes,
   balanceSources,
+  investmentSubtypes,
   type StatementInvestment,
   type StatementPreview,
 } from '@studious/api';
@@ -79,6 +80,7 @@ export const accounts = sqliteTable(
     memberId: text('member_id'),
     name: text('name').notNull(),
     type: text('type', { enum: accountTypes }).notNull(),
+    subtype: text('subtype', { enum: investmentSubtypes }),
     currency: text('currency').notNull().default('CAD'),
     balanceSource: text('balance_source', { enum: balanceSources }).notNull().default('MANUAL'),
     ...timestamps(),
@@ -93,6 +95,10 @@ export const accounts = sqliteTable(
     }),
     check('accounts_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
     check('accounts_type_valid', sql`${table.type} IN (${inList(accountTypes)})`),
+    check(
+      'accounts_subtype_valid',
+      sql`${table.subtype} IS NULL OR (${table.type} = 'INVESTMENT' AND ${table.subtype} IN (${inList(investmentSubtypes)}))`,
+    ),
     check(
       'accounts_balance_source_valid',
       sql`${table.balanceSource} IN (${inList(balanceSources)})`,
@@ -139,8 +145,8 @@ export type BalanceSnapshot = typeof balanceSnapshots.$inferSelect;
 export type NewHousehold = Pick<Household, 'name' | 'defaultCurrency'>;
 export type NewMember = Pick<Member, 'name'>;
 export type NewAccount = Pick<Account, 'name' | 'type' | 'currency' | 'balanceSource'> &
-  Partial<Pick<Account, 'memberId'>>;
-export type AccountUpdate = Partial<Pick<Account, 'name' | 'memberId'>>;
+  Partial<Pick<Account, 'memberId' | 'subtype'>>;
+export type AccountUpdate = Partial<Pick<Account, 'name' | 'memberId' | 'subtype'>>;
 export type NewBalanceSnapshot = Pick<BalanceSnapshot, 'amount' | 'asOf'>;
 
 export const expenseCategories = sqliteTable(

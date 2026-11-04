@@ -223,12 +223,15 @@ test('reviews a dated Questrade XLSX, saves CAD equity and preserves native-curr
   ).json();
   const account = await (
     await page.request.post(`/api/households/${home.id}/accounts`, {
-      data: { name: 'Questrade TFSA', type: 'INVESTMENT', currency: 'CAD' },
+      data: { name: 'Questrade TFSA', type: 'INVESTMENT', subtype: 'TFSA', currency: 'CAD' },
     })
   ).json();
   await page.addInitScript((id) => localStorage.setItem('studious.householdId', id), home.id);
   await page.goto('/');
   await page.getByRole('button', { name: /Questrade TFSA.*No balance yet/ }).click();
+  await expect(
+    page.getByRole('region', { name: 'Account details', exact: true }).locator('.eyebrow'),
+  ).toHaveText('Investment \u00b7 TFSA');
   const imports = page.getByRole('region', { name: 'Investment statement imports' });
   await imports.getByLabel('Investment export (PDF or XLSX)', { exact: true }).setInputFiles({
     name: 'InvestmentSummary.xlsx',
@@ -294,6 +297,12 @@ test('reviews a Sun Life PDF before saving a snapshot and downloading its origin
   await page.addInitScript((id) => localStorage.setItem('studious.householdId', id), home.id);
   await page.goto('/');
   await page.getByRole('button', { name: /Sun Life retirement.*No balance yet/ }).click();
+  await page.getByRole('button', { name: 'Edit account', exact: true }).click();
+  await page.getByLabel('Investment sub-type', { exact: true }).selectOption('DCPP');
+  await page.getByRole('button', { name: 'Save account', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: /Sun Life retirement.*Investment \u00b7 DCPP/ }),
+  ).toBeVisible();
   const statements = page.getByRole('region', { name: 'Investment statement imports' });
   await statements.getByLabel('Investment export (PDF or XLSX)', { exact: true }).setInputFiles({
     name: 'sunlife.pdf',

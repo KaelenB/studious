@@ -5,8 +5,12 @@
     accountLabels,
     accountTypes,
     errorMessage,
+    investmentSubtypes,
+    subtypeDescriptions,
+    subtypeLabels,
     type Account,
     type AccountInput,
+    type InvestmentSubtype,
     type Member,
   } from '../lib/api';
   let {
@@ -26,6 +30,7 @@
   let type = $state<Account['type']>(untrack(() => account?.type ?? 'CHEQUING'));
   let selectedCurrency = $state(untrack(() => account?.currency ?? currency));
   let memberId = $state(untrack(() => account?.memberId ?? ''));
+  let subtype = $state<InvestmentSubtype | ''>(untrack(() => account?.subtype ?? ''));
   let busy = $state(false);
   let error = $state('');
   async function save(event: SubmitEvent) {
@@ -38,6 +43,7 @@
         type,
         currency: selectedCurrency,
         memberId: memberId || null,
+        subtype: type === 'INVESTMENT' ? subtype || null : null,
       });
     } catch (cause) {
       error = errorMessage(cause);
@@ -94,6 +100,21 @@
           disabled={!!account}
         />
       </Col>
+      {#if type === 'INVESTMENT'}
+        <Col md="6">
+          <Label for="account-subtype">Investment sub-type</Label><Input
+            type="select"
+            id="account-subtype"
+            bind:value={subtype}
+            ><option value="">Not specified</option>{#each investmentSubtypes as value}<option
+                {value}
+                >{subtypeLabels[value] === subtypeDescriptions[value]
+                  ? subtypeLabels[value]
+                  : `${subtypeLabels[value]} \u2014 ${subtypeDescriptions[value]}`}</option
+              >{/each}</Input
+          >
+        </Col>
+      {/if}
     </Row>
     <p class="muted small">
       Manual balances only. {account

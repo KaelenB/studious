@@ -9,6 +9,8 @@ import type { FinanceRepository } from '../repositories/finance.js';
 import type { Storage } from '@studious/api';
 import { ApplicationError } from './errors.js';
 
+const subtypeConflict = 'Only investment accounts can have a sub-type';
+
 export function createFinanceService(
   repository: FinanceRepository,
   storage: () => Promise<Storage>,
@@ -39,9 +41,18 @@ export function createFinanceService(
       if (input.balanceSource !== 'MANUAL') {
         throw new ApplicationError('CONFLICT', 'Only manual accounts are supported in this phase');
       }
+      if (input.subtype != null && input.type !== 'INVESTMENT') {
+        throw new ApplicationError('CONFLICT', subtypeConflict);
+      }
       return repository.createAccount({ ...input, householdId });
     },
     async updateAccount(householdId: string, accountId: string, input: AccountUpdate) {
+      if (input.subtype != null) {
+        const current = await requireAccount(householdId, accountId);
+        if (current.type !== 'INVESTMENT') {
+          throw new ApplicationError('CONFLICT', subtypeConflict);
+        }
+      }
       const account = await repository.updateAccount(householdId, accountId, input);
       if (!account) throw new ApplicationError('NOT_FOUND', 'Account not found');
       return account;

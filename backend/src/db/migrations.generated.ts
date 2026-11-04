@@ -23,4 +23,11 @@ export const migrations: readonly { tag: string; hash: string; statements: reado
       'CREATE UNIQUE INDEX `statement_archives_snapshot_unique` ON `statement_archives` (`snapshot_id`);',
     ],
   },
+  {
+    tag: '0001_investment_subtypes',
+    hash: 'ff161c448bfad4f20666945c009e273f2be0f23c84467687f9e9818fec35c409',
+    statements: [
+      "-- Hand-written: drizzle-kit emits a table rebuild with PRAGMA foreign_keys=OFF, which cannot run\n-- inside the transactional migration runner while other tables reference accounts.\nALTER TABLE `accounts` ADD COLUMN `subtype` text CONSTRAINT \"accounts_subtype_valid\" CHECK(\"subtype\" IS NULL OR (\"type\" = 'INVESTMENT' AND \"subtype\" IN ('TFSA', 'RRSP', 'SPOUSAL_RRSP', 'GROUP_RRSP', 'FHSA', 'RESP', 'RDSP', 'RRIF', 'LIRA', 'LIF', 'DCPP', 'DBPP', 'DPSP', 'NON_REGISTERED')));",
+    ],
+  },
 ];

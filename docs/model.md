@@ -64,7 +64,8 @@ out of scope for v1.
 
 A financial account, including deposit, investment, credit, loan, or mortgage
 accounts. The account type describes the kind of account; its balance source
-describes how its balance is obtained.
+describes how its balance is obtained. Investment accounts may also carry a
+sub-type identifying the registered plan (for example a TFSA or a workplace DCPP).
 
 | Field                    | Type          | Constraints / notes                                               |
 | ------------------------ | ------------- | ----------------------------------------------------------------- |
@@ -73,10 +74,17 @@ describes how its balance is obtained.
 | `memberId`               | ID?           | Optional; references a member in the same household               |
 | `name`                   | String        | Required                                                          |
 | `type`                   | Enum          | `CHEQUING`, `SAVINGS`, `INVESTMENT`, `CREDIT`, `LOAN`, `MORTGAGE` |
+| `subtype`                | Enum?         | Investment only; see sub-types below; editable                    |
 | `currency`               | Currency code | Required                                                          |
 | `balanceSource`          | Enum          | `MANUAL`, `PROJECTED`, `INTEGRATED`                               |
 | `createdAt`, `updatedAt` | Timestamp     | Required                                                          |
 | `deletedAt`              | Timestamp?    | Soft delete; preserve balance history                             |
+
+Investment sub-types: `TFSA`, `RRSP`, `SPOUSAL_RRSP`, `GROUP_RRSP`, `FHSA`, `RESP`,
+`RDSP`, `RRIF`, `LIRA`, `LIF`, `DCPP` (defined contribution pension), `DBPP`
+(defined benefit pension), `DPSP`, and `NON_REGISTERED`. A database check
+constraint (`accounts_subtype_valid`) rejects a sub-type on any other account type.
+Unlike type and currency, the sub-type can be corrected after creation.
 
 ### BalanceSnapshot
 

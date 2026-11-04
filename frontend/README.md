@@ -11,6 +11,8 @@ filesystem router are not needed yet.
 
 - Create a household or reconnect by ID; remember only its ID in local storage.
 - Add household members and create, rename, attribute, or archive accounts.
+- Classify investment accounts by plan (TFSA, RRSP, FHSA, DCPP, and more); the
+  sub-type shows beside the account type and can be changed with **Edit account**.
 - Record timestamped balance snapshots and page through their history.
 - View latest balances and recorded asset/debt/net-worth totals per currency.
 - Create expense categories and record one-off expenses with optional category/member.

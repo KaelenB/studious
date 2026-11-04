@@ -12,7 +12,14 @@
     Spinner,
     Table,
   } from '@sveltestrap/sveltestrap';
-  import { api, errorMessage, moneyPattern, type Account, type Snapshot } from '../lib/api';
+  import {
+    accountKind,
+    api,
+    errorMessage,
+    moneyPattern,
+    type Account,
+    type Snapshot,
+  } from '../lib/api';
   import { cents, formatMoney, localDateTime } from '../lib/money';
   import Statements from './Statements.svelte';
   let {
@@ -121,7 +128,7 @@
 <Card class="detail" role="region" aria-label="Account details">
   <div class="section-heading">
     <div>
-      <div class="eyebrow">Account details</div>
+      <div class="eyebrow">{accountKind(account)}</div>
       <h2>{account.name}</h2>
     </div>
     <Button color="primary" outline disabled={busy} on:click={onedit}>Edit account</Button>

@@ -195,7 +195,8 @@ and CI above are planned.
 
 ### 3.2 Accounts & Balances
 
-- Account types: chequing, savings, investment (TFSA, RRSP, FHSA, non-registered), credit, loan, and mortgage.
+- Account types: chequing, savings, investment, credit, loan, and mortgage.
+- Investment sub-types: TFSA, RRSP (individual, spousal, group), FHSA, RESP, RDSP, RRIF, LIRA, LIF, DCPP, DBPP, DPSP, and non-registered.
 - Each account gets its balance from one **balance source**:
   - **Manual**: the user enters snapshots.
   - **Projected**: calculated by formula (see §3.5).

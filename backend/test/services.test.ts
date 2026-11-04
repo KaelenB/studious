@@ -10,6 +10,7 @@ const account: Account = {
   memberId: null,
   name: 'Savings',
   type: 'SAVINGS',
+  subtype: null,
   currency: 'CAD',
   balanceSource: 'MANUAL',
   createdAt: new Date('2026-01-01T00:00:00Z'),
@@ -111,6 +112,31 @@ describe('finance service without HTTP or a database', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(service.archiveAccount('household-id', 'missing')).rejects.toMatchObject({
       code: 'NOT_FOUND',
+    });
+  });
+
+  it('allows sub-types only on investment accounts', async () => {
+    expect(() =>
+      service.createAccount('household-id', {
+        name: 'Bank',
+        type: 'SAVINGS',
+        subtype: 'TFSA',
+        currency: 'CAD',
+        balanceSource: 'MANUAL',
+      }),
+    ).toThrow('Only investment accounts can have a sub-type');
+    repository.findAccount.mockResolvedValue(account);
+    await expect(
+      service.updateAccount('household-id', 'account-id', { subtype: 'TFSA' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(repository.updateAccount).not.toHaveBeenCalled();
+
+    const investment = { ...account, type: 'INVESTMENT' as const, subtype: 'DCPP' as const };
+    repository.findAccount.mockResolvedValue(investment);
+    repository.updateAccount.mockResolvedValue(investment);
+    await service.updateAccount('household-id', 'account-id', { subtype: 'DCPP' });
+    expect(repository.updateAccount).toHaveBeenCalledWith('household-id', 'account-id', {
+      subtype: 'DCPP',
     });
   });
 });
