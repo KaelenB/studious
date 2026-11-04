@@ -732,6 +732,91 @@ footer {
   min-width: 10rem;
   overflow-wrap: anywhere;
 }
+.expense-table td,
+.expense-table th {
+  vertical-align: middle;
+}
+.expense-table .expense-meta {
+  min-width: 9rem;
+}
+.expense-table .expense-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+.expense-table .expense-actions .d-flex {
+  flex-wrap: nowrap !important;
+  justify-content: flex-end;
+}
+.expense-table .btn {
+  --bs-btn-padding-x: 10px;
+  --bs-btn-padding-y: 4px;
+  font-size: 0.75rem;
+}
+@media (max-width: 640px) {
+  .expense-table thead {
+    display: none;
+  }
+  .expense-table,
+  .expense-table tbody {
+    display: block;
+  }
+  .expense-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name amount'
+      'meta date'
+      'actions actions';
+    gap: 0.15rem 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .expense-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+    box-shadow: none !important;
+    min-width: 0;
+    width: auto;
+  }
+  .expense-table .expense-name {
+    grid-area: name;
+    font-weight: 600;
+  }
+  .expense-table .expense-amount {
+    grid-area: amount;
+    font-weight: 600;
+  }
+  .expense-table .expense-meta {
+    grid-area: meta;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .expense-table .expense-meta br {
+    display: none;
+  }
+  .expense-table .expense-meta .small::before {
+    content: ' \00b7  ';
+  }
+  .expense-table .expense-date {
+    grid-area: date;
+    text-align: right;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .expense-table .expense-actions {
+    grid-area: actions;
+    width: auto;
+    margin-top: 0.4rem;
+    white-space: normal;
+    text-align: left;
+  }
+  .expense-table .expense-actions .d-flex {
+    flex-wrap: wrap !important;
+    justify-content: flex-start;
+  }
+}
 
 .expenses-section .badge {
   max-width: 100%;

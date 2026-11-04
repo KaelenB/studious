@@ -309,27 +309,30 @@
     </Form>
   {/if}
   {#if items.length}
-    <Table responsive hover aria-label="Expense history">
+    <Table responsive hover class="expense-table" aria-label="Expense history">
       <thead
         ><tr
-          ><th>Date</th><th>Expense</th><th>Category / member</th><th>Amount</th><th>Actions</th
+          ><th>Date</th><th>Expense</th><th>Category / member</th><th class="numeric">Amount</th><th
+            class="expense-actions">Actions</th
           ></tr
         ></thead
       >
       <tbody
         >{#each items as expense (expense.id)}<tr>
-            <td class="text-nowrap">{expense.startDate}</td>
+            <td class="expense-date text-nowrap">{expense.startDate}</td>
             <td class="expense-name">{expense.name}</td>
-            <td
+            <td class="expense-meta"
               >{categories.find((category) => category.id === expense.categoryId)?.name ??
                 'Uncategorized'}<br /><span class="muted small"
                 >{members.find((member) => member.id === expense.memberId)?.name ??
                   'Shared household'}</span
               ></td
             >
-            <td class="text-nowrap">{formatMoney(cents(expense.amount), expense.currency)}</td>
-            <td
-              ><div class="d-flex flex-wrap gap-2">
+            <td class="expense-amount numeric text-nowrap"
+              >{formatMoney(cents(expense.amount), expense.currency)}</td
+            >
+            <td class="expense-actions"
+              ><div class="d-flex flex-wrap gap-2 align-items-center">
                 {#if archiveId === expense.id}
                   <span>Archive {expense.name}?</span><Button
                     color="danger"
