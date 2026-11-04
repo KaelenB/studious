@@ -10,14 +10,18 @@ the feature work.
 
 The [backend schema](../backend/src/models/schema.ts) currently implements `Household`,
 `Member`, `Account`, `BalanceSnapshot`, `ExpenseCategory`, and the one-off portion
-of `Expense`, plus `StatementArchive`, `MortgageTerms`, and `Prepayment`, using Drizzle ORM and one central SQLite database owned by the API.
+of `Expense`, plus dated `Income`, `BudgetImportRow` provenance, `StatementArchive`, `MortgageTerms`, and `Prepayment`, using Drizzle ORM and one central SQLite database owned by the API.
 These use UUID identifiers and two-place decimal-string amounts.
-The API accepts manual accounts and snapshots, plus positive dated expenses
+The API accepts manual accounts and snapshots, plus signed non-zero dated expenses (negative for refunds), positive dated income
 with optional household category/member attribution, and mortgage terms with
 prepayments whose amortization projection is computed on read. Expense schedules,
 `recurrenceRuleId` (including the mortgage payment rule), tags, and all other entities below remain design definitions,
 not implemented database tables. Expense entries do not alter account snapshots.
 See the [backend guide](../backend/README.md) for setup and supported endpoints.
+
+The yearly budget importer reads only `Expenses` and `Income` sheets. Dated
+`Income` records are actual workbook receipts, distinct from the planned
+`IncomeStream` recurrence/gross-pay model below.
 
 ## Conventions
 
@@ -235,7 +239,44 @@ dated `BalanceSnapshot` history remains the financial record.
 | `note`                   | Text?         | Up to 200 characters                                      |
 | `createdAt`, `updatedAt` | Timestamp     | Required                                                  |
 
-### IncomeStream
+### Income
+
+Implemented one-off receipt, including imported historical income. Amounts are
+preserved as recorded; reimbursements and transfers are not relabelled as salary
+or inferred to be gross pay. Income does not change account snapshots.
+
+| Field                    | Type          | Constraints / notes                          |
+| ------------------------ | ------------- | -------------------------------------------- |
+| `id`, `householdId`      | UUID          | Primary key and household scope              |
+| `memberId`               | UUID?         | Composite FK to member in the same household |
+| `name`                   | String        | Required, at most 200 characters             |
+| `amount`                 | Decimal money | Positive, canonical two-place string         |
+| `currency`               | Currency code | Three uppercase letters                      |
+| `startDate`              | Date          | Actual receipt date, years 1000–9999         |
+| `createdAt`, `updatedAt` | Timestamp     | Required                                     |
+| `deletedAt`              | Timestamp?    | Soft archive; excluded from reports          |
+
+### BudgetImportRow
+
+Implemented import provenance and idempotency record, saved in the same
+transaction as its expense/income row. Original workbooks remain local; their
+bytes are not retained in SQLite.
+
+| Field                    | Type           | Constraints / notes                                                                 |
+| ------------------------ | -------------- | ----------------------------------------------------------------------------------- |
+| `id`, `householdId`      | UUID           | Primary key and household FK                                                        |
+| `key`                    | SHA-256        | Unique with household; normalized transaction identity plus within-sheet occurrence |
+| `fileHash`, `filename`   | String         | Original workbook hash and display filename                                         |
+| `sheet`, `row`           | Enum / Integer | `Expenses` or `Income`, one-based original worksheet row                            |
+| `recordId`               | UUID           | Imported expense/income ID, application-enforced polymorphic reference              |
+| `createdAt`, `updatedAt` | Timestamp      | Required                                                                            |
+
+Import keys persist after edits or archives. Re-imports skip identical imported
+rows, but changed source rows are new entries; manual records are not matched.
+Member mapping is explicit and household-scoped. Category and member creation
+and all transaction/provenance inserts succeed or roll back together.
+
+### IncomeStream (planned)
 
 An income source for the household, optionally attributed to a member. Pay
 occurrences are generated from its recurrence rule; gross and deduction amounts
@@ -282,7 +323,7 @@ independent of pagination. Archived rows are retained but excluded from these to
 | `memberId`               | ID?           | Optional; references a member in the same household            |
 | `categoryId`             | ID?           | Optional; references an expense category in the same household |
 | `name`                   | String        | Required                                                       |
-| `amount`                 | Decimal money | Required; greater than zero                                    |
+| `amount`                 | Decimal money | Required; non-zero, negative for refunds                       |
 | `currency`               | Currency code | Required                                                       |
 | `startDate`              | Date          | Required; API supports years 1000–9999                         |
 | `recurrenceRuleId`       | ID?           | References a recurrence rule; null for one-off                 |
@@ -294,8 +335,8 @@ independent of pagination. Archived rows are retained but excluded from these to
 A household-defined category used to group expenses in reports.
 
 Category creation and listing are implemented. Names are trimmed and unique
-within a household (case-sensitive). Category rename/delete and reports by
-category are not implemented yet.
+within a household (case-sensitive). Category reports are available on the
+overview; category rename/delete are not implemented yet.
 
 | Field                    | Type      | Constraints / notes                   |
 | ------------------------ | --------- | ------------------------------------- |
@@ -369,6 +410,8 @@ erDiagram
     HOUSEHOLD ||--o{ MEMBER : contains
     HOUSEHOLD ||--o{ ACCOUNT : owns
     HOUSEHOLD ||--o{ INCOME_STREAM : owns
+    HOUSEHOLD ||--o{ INCOME : records
+    HOUSEHOLD ||--o{ BUDGET_IMPORT_ROW : tracks
     HOUSEHOLD ||--o{ EXPENSE : owns
     HOUSEHOLD ||--o{ EXPENSE_CATEGORY : defines
     HOUSEHOLD ||--o{ TAG : defines
@@ -378,6 +421,7 @@ erDiagram
 
     MEMBER o|--o{ ACCOUNT : attributes
     MEMBER o|--o{ INCOME_STREAM : earns
+    MEMBER o|--o{ INCOME : receives
     MEMBER o|--o{ EXPENSE : attributes
     MEMBER o|--o{ REMINDER : receives
 

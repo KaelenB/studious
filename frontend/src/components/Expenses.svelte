@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import {
     Alert,
     Badge,
@@ -29,11 +29,13 @@
     members,
     disabled = false,
     onbusy,
+    revision = 0,
   }: {
     household: Household;
     members: Member[];
     disabled?: boolean;
     onbusy: (busy: boolean) => void;
+    revision?: number;
   } = $props();
   const initialMonth = localDateTime().slice(0, 7);
   let month = $state(initialMonth);
@@ -83,8 +85,9 @@
     }
   }
 
-  onMount(() => {
-    void load(0);
+  $effect(() => {
+    void revision;
+    untrack(() => void load(0));
     return () => controller?.abort();
   });
 
@@ -188,7 +191,8 @@
     <div>
       <h2>Expenses</h2>
       <p class="muted small">
-        One-off spending, organized by calendar month. Entries do not change account balances.
+        Spending and refunds by calendar month, including imported history. Negative amounts reduce
+        spending. Entries do not change account balances.
       </p>
     </div>
     <Button color="primary" disabled={locked} on:click={() => edit(null)}>+ Add expense</Button>
@@ -240,7 +244,7 @@
             id="expense-amount"
             type="text"
             inputmode="decimal"
-            pattern={'(?:0|[1-9][0-9]{0,11})\\.[0-9]{2}'}
+            pattern={'-?(?:0|[1-9][0-9]{0,11})\\.[0-9]{2}'}
             placeholder="0.00"
             required
             bind:value={amount}

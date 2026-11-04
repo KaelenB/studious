@@ -23,16 +23,40 @@ filesystem router are not needed yet.
 - Add or remove mortgage prepayments to see the interest they save, and record
   the projected mortgage balance as a snapshot with one click.
 - View latest balances and recorded asset/debt/net-worth totals per currency.
+- Explore combined household net-worth and investment history, asset allocation,
+  net worth by member (including shared accounts), monthly category-stacked
+  spending, and spending breakdowns. Select 6/12/24/36 months, a historical
+  through-date and a currency.
+- Read point values with hover, tap or arrow keys; toggle chart series and open
+  the monthly net-worth table. Mortgage and overview timelines use `TimeChart`.
+- Compare month-to-date, year-to-date and 12-month recorded net-worth changes.
+  Month-end balances carry forward; missing observations stay unknown. Growth
+  is unavailable when the observed account set changes. Deposits, withdrawals
+  and debt repayments affect changes, so these are not investment returns.
+  The last month stops at the selected through-date (default today, UTC).
+  Archived accounts are excluded throughout history; property values are not
+  added as assets. Currencies are never mixed. Expense mutations refresh charts.
 - Create expense categories and record one-off expenses with optional category/member.
 - Edit or archive expenses, filter by calendar month, and page through 20 rows at a time.
 - View exact monthly spending totals by currency across all pages.
+- Record, edit and archive historical income by month/member, with exact
+  per-currency totals. View combined household monthly income, expenses net of
+  refunds, recorded surplus and a cash-flow table on the overview.
+- Use **Import history** to upload each yearly budget XLSX. Preview both
+  transaction sheets, review every warning/row and match spreadsheet owners to
+  household members (or shared ownership) before confirming. Repeated imports
+  skip previously imported rows; invalid populated rows block all writes.
+  Negative expenses are refunds; extra precision is rounded with a warning.
+  Actual cell dates are retained even when they differ from the filename year.
+  Original workbooks are not stored in the database; keep your local files.
+  Importing income/expenses never changes account snapshots.
 - Review Sun Life PDF closing balances before creating manual investment snapshots.
 - Download original PDFs from a persistent, paginated per-account archive.
 - Review historical investment names, categories, units, precise prices and values.
 - Accessible labelled forms, keyboard focus, loading/empty/error states, and a
   responsive desktop/mobile layout.
 
-Income, recurring expenses, investment projections, calendar, dashboard charts, and authentication
+Recurring income/deductions, recurring expenses, investment projections, calendar, and authentication
 are not implemented yet. These sections are not represented by fake data or
 nonfunctional navigation.
 
@@ -91,6 +115,9 @@ src/
     AccountForm.svelte          # Create/edit account
     AccountDetail.svelte        # Balance entry, paginated history, archive
     Expenses.svelte             # Categories, expense forms, monthly totals/history
+    Income.svelte               # Dated income receipts, monthly totals and edits
+    BudgetImport.svelte         # Historical XLSX preview, member mapping and import
+    Overview.svelte             # Household trends and historical cash flow
     Statements.svelte           # PDF preview/confirmation and archive downloads
     StatementInvestments.svelte # Historical investment breakdown
   lib/
@@ -130,7 +157,7 @@ No financial data or provider tokens are persisted in browser storage.
 
 Expenses use calendar dates rather than instants; the UI preserves the entered
 date without timezone conversion. Saving an expense opens its month. Reloading
-starts with the current local month. Only positive one-off expenses are supported;
+starts with the current local month. One-off expenses support negative refunds (not zero);
 entries do not alter account balances or imply a bill has been paid. Archiving
 requires confirmation and excludes the record from monthly totals without
 deleting it. Category names are case-sensitive and unique per household.

@@ -32,6 +32,8 @@ import {
   statementPreviewSchema,
   statementSchema,
   mortgageQuery,
+  overviewQuery,
+  overviewSchema,
   mortgageSchema,
   mortgageTermsBody,
   prepaymentBody,
@@ -39,6 +41,19 @@ import {
   prepaymentSchema,
   type MortgageTermsInput,
   type PrepaymentInput,
+  incomeBody,
+  incomeUpdateBody,
+  incomeParams,
+  incomeSchema,
+  incomePageSchema,
+  budgetUploadQuery,
+  budgetConfirmQuery,
+  budgetMemberMapping,
+  budgetPreviewSchema,
+  budgetImportSchema,
+  type IncomeInput,
+  type IncomeUpdate,
+  type BudgetMemberMapping,
 } from './contracts.js';
 
 export class ApiError extends Error {
@@ -150,6 +165,72 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
 
   return {
     health: (signal?: AbortSignal) => request('/health', healthSchema, { signal }),
+    income: (id: string, month: string, limit = 20, offset = 0, signal?: AbortSignal) => {
+      const query = expenseQuery.parse({ month, limit, offset });
+      return request(
+        `${pathFor(id)}/income?month=${query.month}&limit=${query.limit}&offset=${query.offset}`,
+        incomePageSchema,
+        { signal },
+      );
+    },
+    addIncome: (id: string, input: IncomeInput) =>
+      request(`${pathFor(id)}/income`, incomeSchema, {
+        method: 'POST',
+        body: json(incomeBody.parse(input)),
+      }),
+    updateIncome: (id: string, incomeId: string, input: IncomeUpdate) => {
+      incomeParams.parse({ householdId: id, incomeId });
+      return request(`${pathFor(id)}/income/${encodeURIComponent(incomeId)}`, incomeSchema, {
+        method: 'PATCH',
+        body: json(incomeUpdateBody.parse(input)),
+      });
+    },
+    archiveIncome: (id: string, incomeId: string) => {
+      incomeParams.parse({ householdId: id, incomeId });
+      return request(`${pathFor(id)}/income/${encodeURIComponent(incomeId)}`, z.undefined(), {
+        method: 'DELETE',
+      });
+    },
+    previewBudget: (
+      id: string,
+      file: Blob,
+      filename: string,
+      currency: string,
+      signal?: AbortSignal,
+    ) => {
+      const query = budgetUploadQuery.parse({ filename, currency });
+      return request(
+        `${pathFor(id)}/budget-imports/preview?${new URLSearchParams(query)}`,
+        budgetPreviewSchema,
+        pdfUpload(file, filename, signal),
+      );
+    },
+    importBudget: (
+      id: string,
+      file: Blob,
+      filename: string,
+      currency: string,
+      sha256: string,
+      members: BudgetMemberMapping,
+    ) => {
+      budgetConfirmQuery.parse({
+        filename,
+        currency,
+        sha256,
+        members: JSON.stringify(budgetMemberMapping.parse(members)),
+      });
+      const query = new URLSearchParams({
+        filename,
+        currency,
+        sha256,
+        members: JSON.stringify(members),
+      });
+      return request(
+        `${pathFor(id)}/budget-imports?${query}`,
+        budgetImportSchema,
+        pdfUpload(file, filename),
+      );
+    },
     storage: (signal?: AbortSignal) => request('/storage', storageSchema, { signal }),
     createHousehold: (name: string, defaultCurrency: string) =>
       request('/households', householdSchema, {
@@ -192,6 +273,14 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
         method: 'POST',
         body: json(snapshotBody.parse({ amount, asOf })),
       }),
+    overview: (id: string, months = 12, asOf?: string, signal?: AbortSignal) => {
+      const query = overviewQuery.parse({ months, asOf });
+      return request(
+        `${pathFor(id)}/overview?months=${query.months}${query.asOf ? `&asOf=${query.asOf}` : ''}`,
+        overviewSchema,
+        { signal },
+      );
+    },
     mortgage: (id: string, accountId: string, asOf?: string, signal?: AbortSignal) => {
       const query = mortgageQuery.parse({ asOf });
       return request(

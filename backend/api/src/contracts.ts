@@ -131,7 +131,10 @@ export const expenseBody = z.strictObject({
   amount: z
     .string()
     .regex(moneyPattern, 'Use a decimal string with two places')
-    .refine((value) => !value.startsWith('-') && value !== '0.00', 'Amount must be positive'),
+    .refine(
+      (value) => !['0.00', '-0.00'].includes(value),
+      'Amount must be non-zero; use negative amounts for refunds',
+    ),
   currency: currency.default('CAD'),
   startDate: z.iso.date().refine((value) => value >= '1000-01-01', 'Use a year from 1000 to 9999'),
   memberId: z.uuid().nullable().optional(),
@@ -164,7 +167,7 @@ export const expensePageSchema = z.object({
   totals: z.array(
     z.object({
       currency: z.string(),
-      amount: z.string().regex(/^\d+\.\d{2}$/),
+      amount: z.string().regex(/^-?\d+\.\d{2}$/),
     }),
   ),
 });
@@ -173,6 +176,25 @@ export type Expense = z.infer<typeof expenseSchema>;
 export type ExpenseInput = z.input<typeof expenseBody>;
 export type ExpenseUpdate = z.input<typeof expenseUpdateBody>;
 export type ExpensePage = z.infer<typeof expensePageSchema>;
+
+export const incomeBody = expenseBody.omit({ categoryId: true }).extend({
+  amount: z
+    .string()
+    .regex(moneyPattern)
+    .refine((value) => !value.startsWith('-') && value !== '0.00', 'Income must be positive'),
+});
+export const incomeUpdateBody = incomeBody
+  .omit({ currency: true })
+  .partial()
+  .extend({ currency: currency.optional() })
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
+export const incomeParams = householdParams.extend({ incomeId: z.uuid() });
+export const incomeSchema = expenseSchema.omit({ categoryId: true });
+export const incomePageSchema = expensePageSchema.extend({ items: z.array(incomeSchema) });
+export type Income = z.infer<typeof incomeSchema>;
+export type IncomeInput = z.input<typeof incomeBody>;
+export type IncomeUpdate = z.input<typeof incomeUpdateBody>;
+export type IncomePage = z.infer<typeof incomePageSchema>;
 
 export const statementFileLimit = 10 * 1024 * 1024;
 export const statementQuery = z.strictObject({
@@ -354,3 +376,113 @@ export type Prepayment = z.infer<typeof prepaymentSchema>;
 export type MortgageProjection = z.infer<typeof mortgageProjectionSchema>;
 export type MortgagePayment = z.infer<typeof paymentSchema>;
 export type Mortgage = z.infer<typeof mortgageSchema>;
+
+const yearMonth = z.string().regex(/^[1-9]\d{3}-(?:0[1-9]|1[0-2])$/, 'Use YYYY-MM');
+export const overviewQuery = z
+  .strictObject({
+    months: z.coerce.number().int().min(1).max(120).default(12),
+    /** Day whose month is the last point; defaults to today (UTC). */
+    asOf: calendarDate.optional(),
+  })
+  .refine(({ months, asOf }) => {
+    if (!asOf) return true;
+    const year = Number(asOf.slice(0, 4));
+    const month = Number(asOf.slice(5, 7));
+    return year * 12 + month - months >= 1000 * 12;
+  }, 'The overview window must start in year 1000 or later');
+export const overviewSchema = z.object({
+  /** Oldest first; the last entry is the month containing `asOf`. */
+  months: z.array(yearMonth),
+  /** Month-end balances, capped at asOf for the last month; null before the first observation. */
+  accounts: z.array(z.object({ accountId: z.uuid(), balances: z.array(money.nullable()) })),
+  /** Expense totals grouped by month, currency, category and member. */
+  expenses: z.array(
+    z.object({
+      month: yearMonth,
+      currency: z.string(),
+      categoryId: z.uuid().nullable(),
+      memberId: z.uuid().nullable(),
+      amount: z.string().regex(/^-?\d+\.\d{2}$/),
+    }),
+  ),
+  income: z
+    .array(
+      z.object({
+        month: yearMonth,
+        currency: z.string(),
+        memberId: z.uuid().nullable(),
+        amount: z.string().regex(/^\d+\.\d{2}$/),
+      }),
+    )
+    .default([]),
+});
+export type OverviewInput = z.input<typeof overviewQuery>;
+export type Overview = z.infer<typeof overviewSchema>;
+
+export const budgetFileLimit = 10 * 1024 * 1024;
+export const budgetUploadQuery = z.strictObject({
+  filename: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[^/\\\x00-\x1f]+\.xlsx$/i, 'Choose an XLSX workbook'),
+  currency: currency.default('CAD'),
+});
+export const budgetMemberMapping = z
+  .record(z.string().min(1).max(200), z.union([z.uuid(), z.literal('CREATE'), z.null()]))
+  .refine((value) => Object.keys(value).length <= 50, 'Too many member mappings');
+export const budgetConfirmQuery = budgetUploadQuery.extend({
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  members: z
+    .string()
+    .max(12000)
+    .transform((value, ctx) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Member mapping must be JSON' });
+        return z.NEVER;
+      }
+      const result = budgetMemberMapping.safeParse(parsed);
+      if (!result.success) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid member mapping' });
+        return z.NEVER;
+      }
+      return result.data;
+    }),
+});
+export const budgetRowSchema = z.object({
+  sheet: z.enum(['Expenses', 'Income']),
+  row: z.number().int().positive(),
+  date: z.iso.date(),
+  amount: money,
+  name: z.string(),
+  category: z.string().nullable(),
+  owner: z.string(),
+  key: z.string().regex(/^[a-f0-9]{64}$/),
+  duplicate: z.boolean(),
+});
+export const budgetPreviewSchema = z.object({
+  sha256: z.string(),
+  currency: z.string(),
+  rows: z.array(budgetRowSchema),
+  issues: z.array(z.object({ sheet: z.string(), row: z.number().int(), message: z.string() })),
+  warnings: z.array(z.string()),
+  owners: z.array(z.string()),
+  totals: z.array(
+    z.object({
+      sheet: z.enum(['Expenses', 'Income']),
+      amount: z.string().regex(/^-?\d+\.\d{2}$/),
+      count: z.number().int(),
+    }),
+  ),
+});
+export const budgetImportSchema = z.object({
+  expenses: z.number().int().nonnegative(),
+  income: z.number().int().nonnegative(),
+  duplicates: z.number().int().nonnegative(),
+});
+export type BudgetPreview = z.infer<typeof budgetPreviewSchema>;
+export type BudgetRow = z.infer<typeof budgetRowSchema>;
+export type BudgetMemberMapping = z.infer<typeof budgetMemberMapping>;

@@ -102,6 +102,87 @@ describe('distributed client over HTTP', () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 
+  it('summarises month-end balances and monthly expenses for the household overview', async () => {
+    const home = await api.createHousehold('Overview home', 'CAD');
+    const other = await api.createHousehold('Overview other', 'CAD');
+    const member = await api.addMember(home.id, 'Sam');
+    const tfsa = await api.addAccount(home.id, {
+      name: 'TFSA',
+      type: 'INVESTMENT',
+      subtype: 'TFSA',
+      memberId: member.id,
+    });
+    const card = await api.addAccount(home.id, { name: 'Card', type: 'CREDIT' });
+    const archived = await api.addAccount(home.id, { name: 'Old', type: 'SAVINGS' });
+    const foreign = await api.addAccount(other.id, { name: 'Elsewhere', type: 'SAVINGS' });
+    await api.addBalance(home.id, tfsa.id, '1000.00', '2025-10-15T12:00:00Z');
+    await api.addBalance(home.id, tfsa.id, '1500.00', '2026-01-10T12:00:00Z');
+    await api.addBalance(home.id, tfsa.id, '1600.00', '2026-01-20T12:00:00Z');
+    await api.addBalance(home.id, tfsa.id, '9999.00', '2026-04-01T00:00:00Z');
+    await api.addBalance(home.id, card.id, '250.00', '2026-02-28T23:59:59Z');
+    await api.addBalance(home.id, archived.id, '5.00', '2026-01-01T00:00:00Z');
+    await api.addBalance(other.id, foreign.id, '7.00', '2026-01-01T00:00:00Z');
+    await api.archiveAccount(home.id, archived.id);
+    const groceries = await api.addExpenseCategory(home.id, 'Groceries');
+    await api.addExpense(home.id, {
+      name: 'Food',
+      amount: '100.10',
+      startDate: '2026-02-03',
+      categoryId: groceries.id,
+      memberId: member.id,
+    });
+    await api.addExpense(home.id, {
+      name: 'More food',
+      amount: '50.05',
+      startDate: '2026-02-20',
+      categoryId: groceries.id,
+      memberId: member.id,
+    });
+    await api.addExpense(home.id, {
+      name: 'Trip',
+      amount: '20.00',
+      currency: 'USD',
+      startDate: '2026-03-31',
+    });
+    await api.addExpense(home.id, { name: 'Too old', amount: '1.00', startDate: '2025-12-31' });
+    await api.addExpense(home.id, { name: 'Too new', amount: '1.00', startDate: '2026-04-01' });
+
+    const overview = await api.overview(home.id, 3, '2026-03-31');
+    expect(overview.months).toEqual(['2026-01', '2026-02', '2026-03']);
+    expect(overview.accounts).toHaveLength(2);
+    expect(overview.accounts).toEqual(
+      expect.arrayContaining([
+        { accountId: tfsa.id, balances: ['1600.00', '1600.00', '1600.00'] },
+        { accountId: card.id, balances: [null, '250.00', '250.00'] },
+      ]),
+    );
+    expect(overview.expenses).toEqual([
+      {
+        month: '2026-02',
+        currency: 'CAD',
+        categoryId: groceries.id,
+        memberId: member.id,
+        amount: '150.15',
+      },
+      { month: '2026-03', currency: 'USD', categoryId: null, memberId: null, amount: '20.00' },
+    ]);
+    expect((await api.overview(home.id, 3, '2026-03-15')).expenses).toHaveLength(1);
+    await api.addBalance(home.id, tfsa.id, '1700.00', '2026-03-20T00:00:00Z');
+    expect((await api.overview(home.id, 3, '2026-03-15')).accounts).toContainEqual({
+      accountId: tfsa.id,
+      balances: ['1600.00', '1600.00', '1600.00'],
+    });
+    expect((await api.overview(home.id, 1, '2025-12-01')).accounts).toEqual(
+      expect.arrayContaining([{ accountId: tfsa.id, balances: ['1000.00'] }]),
+    );
+    expect((await api.overview(home.id, 12, '2026-12-31')).months).toHaveLength(12);
+    expect(() => api.overview(home.id, 0)).toThrow();
+    expect(() => api.overview(home.id, 121)).toThrow();
+    expect(() => api.overview(home.id, 120, '1000-01-01')).toThrow();
+    expect(await inject(`/households/${home.id}/overview?months=abc`)).toBe(400);
+    expect(await inject(`/households/${home.id}/overview?asOf=2026-13-01`)).toBe(400);
+  });
+
   it('tracks categorized expenses with edits, calendar dates and soft archives through the SDK', async () => {
     const home = await api.createHousehold('Spending home', 'CAD');
     const member = await api.addMember(home.id, 'Alex');
@@ -225,7 +306,7 @@ describe('distributed client over HTTP', () => {
       database.db.insert(expenses).values({ ...input, householdId: other.id, memberId: member.id }),
     ).rejects.toThrow();
     await expect(
-      database.db.insert(expenses).values({ ...input, amount: '-1.00', householdId: home.id }),
+      database.db.insert(expenses).values({ ...input, amount: '0.00', householdId: home.id }),
     ).rejects.toThrow();
   });
 
@@ -234,7 +315,7 @@ describe('distributed client over HTTP', () => {
     const base = `/households/${home.id}/expenses`;
     const input = { name: 'Lunch', amount: '1.00', startDate: '2026-01-01' };
     for (const invalid of [
-      { amount: '-1.00' },
+      { amount: '-0.00' },
       { amount: '0.00' },
       { amount: 1.23 },
       { amount: '1.001' },

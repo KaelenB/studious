@@ -6,7 +6,11 @@ export interface DocumentExtractors {
   /** Text of a text-based PDF of at most 25 pages; throws StatementError otherwise. */
   pdfText(pdf: Uint8Array): Promise<string>;
   /** Raw cell rows for each named worksheet, keyed by sheet name. */
-  workbookSheets(xlsx: Uint8Array, sheets: readonly string[]): Promise<unknown>;
+  workbookSheets(
+    xlsx: Uint8Array,
+    sheets: readonly string[],
+    limits?: { rows: number; columns: number },
+  ): Promise<unknown>;
 }
 
 export class StatementError extends Error {

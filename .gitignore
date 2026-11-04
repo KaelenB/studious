@@ -7,6 +7,7 @@ test-results/
 .env
 docs/sunlife/
 docs/questrade/
+docs/historical/
 .env.*
 !.env.example
 # Central SQLite database and backups (private financial data)

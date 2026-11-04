@@ -15,6 +15,9 @@
   import AccountDetail from './components/AccountDetail.svelte';
   import Expenses from './components/Expenses.svelte';
   import StorageMeter from './components/StorageMeter.svelte';
+  import Overview from './components/Overview.svelte';
+  import Income from './components/Income.svelte';
+  import BudgetImport from './components/BudgetImport.svelte';
   import {
     api,
     accountKind,
@@ -38,8 +41,11 @@
   let memberBusy = $state(false);
   let mutationBusy = $state(false);
   let expenseBusy = $state(false);
+  let incomeBusy = $state(false);
+  let importBusy = $state(false);
   let memberError = $state('');
   let revision = $state(0);
+  let expenseRevision = $state(0);
   let savedId = $state('');
   let loadController: AbortController | undefined;
   const selected = $derived(
@@ -224,6 +230,8 @@
       <a href="#main" aria-current="page"><span aria-hidden="true">◫</span> Overview</a
       >{#if household}<a href="#accounts"><span aria-hidden="true">▤</span> Accounts</a><a
           href="#expenses"><span aria-hidden="true">▤</span> Expenses</a
+        ><a href="#income"><span aria-hidden="true">+</span> Income</a><a href="#historical"
+          ><span aria-hidden="true">+</span> Import history</a
         ><a href="#household"><span aria-hidden="true">◎</span> Household</a>{/if}
     </nav>
     <div class="sidebar-bottom">
@@ -261,7 +269,7 @@
           </div>
           <Button
             color="primary"
-            disabled={loading || mutationBusy}
+            disabled={loading || mutationBusy || importBusy}
             on:click={() => {
               form = 'create';
             }}>+ Add account</Button
@@ -309,6 +317,15 @@
               no exchange rates are applied.
             </p>{/if}
         </section>
+        {#key household.id}
+          <Overview
+            householdId={household.id}
+            defaultCurrency={household.defaultCurrency}
+            accounts={summaries.map((item) => item.account)}
+            {members}
+            revision={revision + expenseRevision}
+          />
+        {/key}
         {#if form}{#key `${form}:${selectedId ?? ''}`}<AccountForm
               {members}
               currency={household.defaultCurrency}
@@ -382,8 +399,29 @@
           <Expenses
             {household}
             {members}
-            disabled={loading || mutationBusy || memberBusy}
-            onbusy={(busy) => (expenseBusy = busy)}
+            {revision}
+            disabled={loading || mutationBusy || memberBusy || importBusy}
+            onbusy={(busy) => {
+              if (expenseBusy && !busy) expenseRevision++;
+              expenseBusy = busy;
+            }}
+          />
+          <Income
+            {household}
+            {members}
+            {revision}
+            disabled={loading || mutationBusy || memberBusy || importBusy}
+            onbusy={(busy) => {
+              if (incomeBusy && !busy) expenseRevision++;
+              incomeBusy = busy;
+            }}
+          />
+          <BudgetImport
+            {household}
+            {members}
+            disabled={loading || mutationBusy || memberBusy || expenseBusy || incomeBusy}
+            onbusy={(busy) => (importBusy = busy)}
+            onimport={refresh}
           />
         {/key}
         <Card id="household" class="household-section">
@@ -394,7 +432,12 @@
             </div>
             <Button
               color="link"
-              disabled={loading || memberBusy || mutationBusy || expenseBusy}
+              disabled={loading ||
+                memberBusy ||
+                mutationBusy ||
+                expenseBusy ||
+                incomeBusy ||
+                importBusy}
               on:click={disconnect}>Switch household</Button
             >
           </div>
@@ -419,7 +462,11 @@
                 placeholder="Member name"
               />
             </div>
-            <Button type="submit" color="primary" outline disabled={memberBusy || mutationBusy}
+            <Button
+              type="submit"
+              color="primary"
+              outline
+              disabled={memberBusy || mutationBusy || importBusy}
               >{memberBusy ? 'Adding...' : 'Add member'}</Button
             >
           </Form>

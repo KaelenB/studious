@@ -24,7 +24,7 @@ const pdfWorker = `
   });
 `;
 
-const workbookWorker = (sheets: readonly string[]) => `
+const workbookWorker = (sheets: readonly string[], limits = { rows: 502, columns: 40 }) => `
   const { readSheet } = require('read-excel-file/node');
   const chunks = [];
   process.stdin.on('data', chunk => chunks.push(chunk));
@@ -33,7 +33,7 @@ const workbookWorker = (sheets: readonly string[]) => `
       const result = {};
       for (const name of ${JSON.stringify(sheets)}) {
         const rows = await readSheet(Buffer.concat(chunks), name, { parseNumber: value => value });
-        if (rows.length > 502 || rows.some(row => row.length > 40)) throw new Error('Unsupported sheet');
+        if (rows.length > ${limits.rows} || rows.some(row => row.length > ${limits.columns})) throw new Error('Unsupported sheet');
         result[name] = rows;
       }
       process.stdout.write(JSON.stringify(result));
@@ -99,5 +99,12 @@ export const nodeExtractors: DocumentExtractors = {
     if (!parsed.success) throw unreadablePdf();
     return parsed.data.text;
   },
-  workbookSheets: (xlsx, sheets) => sandboxed(workbookWorker(sheets), xlsx, unreadableWorkbook),
+  workbookSheets: (xlsx, sheets, limits) =>
+    sandboxed(workbookWorker(sheets, limits), xlsx, () =>
+      sheets.includes('Expenses')
+        ? new StatementError(
+            'Cannot read this budget workbook. Use an unencrypted XLSX with Expenses and Income sheets, at most 10,000 rows per sheet and 40 columns.',
+          )
+        : unreadableWorkbook(),
+    ),
 };

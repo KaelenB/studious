@@ -42,4 +42,21 @@ export const migrations: readonly { tag: string; hash: string; statements: reado
       'CREATE UNIQUE INDEX `accounts_household_id_type_unique` ON `accounts` (`household_id`,`id`,`type`);',
     ],
   },
+  {
+    tag: '0003_aromatic_shocker',
+    hash: '586ac2b213bc1a90a807e2f8ba5afdb141b3dd490e4544d04d0236539af3ee41',
+    statements: [
+      'CREATE TABLE `budget_import_rows` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`household_id` text NOT NULL,\n\t`key` text NOT NULL,\n\t`file_hash` text NOT NULL,\n\t`filename` text NOT NULL,\n\t`sheet` text NOT NULL,\n\t`row` integer NOT NULL,\n\t`record_id` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tFOREIGN KEY (`household_id`) REFERENCES `households`(`id`) ON UPDATE no action ON DELETE no action\n);',
+      'CREATE UNIQUE INDEX `budget_import_rows_household_key_unique` ON `budget_import_rows` (`household_id`,`key`);',
+      'CREATE TABLE `income` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`household_id` text NOT NULL,\n\t`member_id` text,\n\t`name` text NOT NULL,\n\t`amount` text NOT NULL,\n\t`currency` text DEFAULT \'CAD\' NOT NULL,\n\t`start_date` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tFOREIGN KEY (`household_id`) REFERENCES `households`(`id`) ON UPDATE no action ON DELETE no action,\n\tFOREIGN KEY (`household_id`,`member_id`) REFERENCES `members`(`household_id`,`id`) ON UPDATE no action ON DELETE no action,\n\tCONSTRAINT "income_name_not_blank" CHECK(length(trim("income"."name")) BETWEEN 1 AND 200),\n\tCONSTRAINT "income_amount_format" CHECK("income"."amount" GLOB \'*[0-9].[0-9][0-9]\' AND length("income"."amount") <= 16),\n\tCONSTRAINT "income_amount_positive" CHECK(CAST("income"."amount" AS REAL) > 0),\n\tCONSTRAINT "income_currency_format" CHECK("income"."currency" GLOB \'[A-Z][A-Z][A-Z]\'),\n\tCONSTRAINT "income_start_date_format" CHECK(date("income"."start_date") IS "income"."start_date")\n);',
+      'CREATE INDEX `income_household_date_idx` ON `income` (`household_id`,`start_date`,`id`);',
+      'PRAGMA foreign_keys=OFF;',
+      'CREATE TABLE `__new_expenses` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`household_id` text NOT NULL,\n\t`member_id` text,\n\t`category_id` text,\n\t`name` text NOT NULL,\n\t`amount` text NOT NULL,\n\t`currency` text DEFAULT \'CAD\' NOT NULL,\n\t`start_date` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tFOREIGN KEY (`household_id`) REFERENCES `households`(`id`) ON UPDATE no action ON DELETE no action,\n\tFOREIGN KEY (`household_id`,`member_id`) REFERENCES `members`(`household_id`,`id`) ON UPDATE no action ON DELETE no action,\n\tFOREIGN KEY (`household_id`,`category_id`) REFERENCES `expense_categories`(`household_id`,`id`) ON UPDATE no action ON DELETE no action,\n\tCONSTRAINT "expenses_name_not_blank" CHECK(length(trim("__new_expenses"."name")) BETWEEN 1 AND 200),\n\tCONSTRAINT "expenses_amount_format" CHECK("__new_expenses"."amount" GLOB \'*[0-9].[0-9][0-9]\' AND length("__new_expenses"."amount") <= 16),\n\tCONSTRAINT "expenses_amount_nonzero" CHECK(CAST("__new_expenses"."amount" AS REAL) != 0),\n\tCONSTRAINT "expenses_currency_format" CHECK("__new_expenses"."currency" GLOB \'[A-Z][A-Z][A-Z]\'),\n\tCONSTRAINT "expenses_start_date_format" CHECK(date("__new_expenses"."start_date") IS "__new_expenses"."start_date")\n);',
+      'INSERT INTO `__new_expenses`("id", "household_id", "member_id", "category_id", "name", "amount", "currency", "start_date", "created_at", "updated_at", "deleted_at") SELECT "id", "household_id", "member_id", "category_id", "name", "amount", "currency", "start_date", "created_at", "updated_at", "deleted_at" FROM `expenses`;',
+      'DROP TABLE `expenses`;',
+      'ALTER TABLE `__new_expenses` RENAME TO `expenses`;',
+      'PRAGMA foreign_keys=ON;',
+      'CREATE INDEX `expenses_household_date_idx` ON `expenses` (`household_id`,`start_date`,`id`);',
+    ],
+  },
 ];

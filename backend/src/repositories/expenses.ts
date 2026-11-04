@@ -11,7 +11,7 @@ function nextMonth(month: string) {
 }
 
 /** Formats an integer number of cents as the API's two-place decimal string. */
-function centsToMoney(cents: bigint) {
+export function centsToMoney(cents: bigint) {
   const sign = cents < 0n ? '-' : '';
   const absolute = (cents < 0n ? -cents : cents).toString().padStart(3, '0');
   return `${sign}${absolute.slice(0, -2)}.${absolute.slice(-2)}`;

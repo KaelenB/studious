@@ -185,6 +185,20 @@ and CI above are planned.
 
 ### 3.1 Dashboard
 
+- **Implemented:** combined household net-worth and investment balance histories,
+  asset allocation by account/plan type, net worth by member/shared ownership,
+  monthly category-stacked spending, category breakdowns and income/expense
+  cash-flow history. Choose 6/12/24/36 months, a through-date and currency;
+  read values by hover, tap or keyboard. Growth cards show
+  comparable month-to-date, year-to-date and 12-month balance changes, not returns.
+  Month-end observations carry forward; unknown balances remain unknown.
+  The last month stops at the selected through-date (default today, UTC), and currencies remain separate.
+- **Historical import:** preview the `Expenses` and `Income` sheets in yearly
+  budget workbooks, map members and confirm a transactional, duplicate-safe
+  import. Source dates, categories and refunds are preserved; rounding and
+  filename-year mismatches are flagged. Original personal files stay local
+  and Git-ignored. Dated income and expenses can be edited/archived by month.
+- The following broader dashboard features remain the roadmap:
 - **Net worth summary**: assets (accounts and investments) minus liabilities (mortgage and debts).
 - **Cash-flow summary**: income and expenses for the current month, with the net result.
 - **Upcoming events**: the next paycheques, bills, and mortgage payments.
@@ -251,7 +265,8 @@ and CI above are planned.
 ### 3.8 Household & Multi-User _(phased)_
 
 - **v1:** one user, but data is already scoped by `householdId`, and records have an optional `memberId` so they can be attributed to a person.
-- **Later:** authentication, multiple users per household, roles (owner/member/viewer), and dashboards that show combined totals or a breakdown per member.
+- **Implemented:** combined household totals and a member/shared-account net-worth breakdown.
+- **Later:** authentication, multiple users per household, and roles (owner/member/viewer).
 - Scoping data by household from day one means multi-user can be added without a schema rewrite. Building auth now is not needed (YAGNI).
 
 ### 3.9 Visualizations

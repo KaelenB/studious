@@ -4,6 +4,8 @@ import { openNodeDatabase } from '../../backend/src/db/node';
 import { sunLifeInvestmentPdf } from '../../backend/test/fixtures/sunlife';
 import { readFile } from 'node:fs/promises';
 import { questradeXlsx } from '../../backend/test/fixtures/questrade';
+import { createApiClient } from '@studious/api';
+import { budgetXlsx } from '../../backend/test/fixtures/budget';
 
 let database: ReturnType<typeof openNodeDatabase> | undefined;
 let app: ReturnType<typeof buildApp> | undefined;
@@ -18,6 +20,262 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await app?.close();
   await database?.close();
+});
+
+test('previews historical budgets, maps members, imports refunds and income, and prevents reimports', async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const api = createApiClient('http://127.0.0.1:3101');
+  const home = await api.createHousehold('Historical household', 'CAD');
+  const alex = await api.addMember(home.id, 'Alex');
+  await page.addInitScript((id) => localStorage.setItem('studious.householdId', id), home.id);
+  await page.goto('/');
+  const importer = page.getByRole('region', { name: 'Historical budget import' });
+  const upload = (invalid = false) =>
+    importer.getByLabel('Budget workbook (XLSX)').setInputFiles({
+      name: 'Budget - 2024.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: budgetXlsx({ invalidDate: invalid }),
+    });
+  await upload();
+  expect(
+    await importer
+      .locator('input')
+      .evaluateAll((fields) =>
+        fields
+          .filter((field) => !field.checkValidity())
+          .map((field) => ({ id: field.id, value: field.value, message: field.validationMessage })),
+      ),
+  ).toEqual([]);
+  await importer.getByRole('button', { name: 'Preview workbook' }).click();
+  await expect(importer.getByLabel('Budget workbook review')).toContainText(
+    '6 valid rows; 0 already imported',
+  );
+  await expect(importer).toContainText('215.65');
+  await expect(importer).toContainText('22.012');
+  await expect(importer).toContainText('2023-12-30');
+  await expect(importer.getByLabel('Alex', { exact: true })).toHaveValue(alex.id);
+  expect((await api.expenses(home.id, '2024-07')).items).toEqual([]);
+  expect((await api.income(home.id, '2024-07')).items).toEqual([]);
+  await expect(importer.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+  await importer.getByLabel(/I reviewed the dates/).check();
+  await importer.getByLabel('Sam', { exact: true }).selectOption('SHARED');
+  await expect(importer.getByLabel(/I reviewed the dates/)).not.toBeChecked();
+  await importer.getByLabel('Sam', { exact: true }).selectOption('CREATE');
+  await importer.getByLabel(/I reviewed the dates/).check();
+  await importer.screenshot({ path: testInfo.outputPath('historical-import.png') });
+  await importer.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(importer.getByRole('alert')).toContainText(
+    'Imported 4 expenses and 2 income entries',
+  );
+  await expect(page.locator('.member-chip')).toHaveCount(2);
+  const expenses = page.getByRole('region', { name: 'Household expenses' });
+  await expenses.getByLabel('Expense month', { exact: true }).fill('2024-07');
+  await expenses.getByRole('button', { name: 'Show month', exact: true }).click();
+  await expect(expenses.getByLabel('Monthly expense totals')).toContainText('215.65');
+  await expect(expenses.getByRole('row').filter({ hasText: 'Refund' })).toContainText('-CAD');
+  await expenses.getByRole('button', { name: 'Edit expense Refund', exact: true }).click();
+  await expenses.getByRole('button', { name: 'Save expense', exact: true }).click();
+  await expect(expenses.getByRole('alert')).toContainText('Expense saved.');
+
+  const income = page.getByRole('region', { name: 'Household income' });
+  await income.getByLabel('Income month', { exact: true }).fill('2024-07');
+  await income.getByRole('button', { name: 'Show month', exact: true }).click();
+  await expect(income.getByLabel('Monthly income totals')).toContainText('500.00');
+  await expect(income.getByRole('row').filter({ hasText: 'Pay' })).toContainText('Sam');
+  await income.getByRole('button', { name: '+ Add income', exact: true }).click();
+  await income.getByLabel('Income name', { exact: true }).fill('Extra receipt');
+  await income.getByLabel('Income amount', { exact: true }).fill('12.34');
+  await income.getByLabel('Income date', { exact: true }).fill('2024-07-04');
+  await income.getByRole('button', { name: 'Save income', exact: true }).click();
+  await expect(income.getByLabel('Monthly income totals')).toContainText('512.34');
+  await income.getByRole('button', { name: 'Edit income Extra receipt', exact: true }).click();
+  await income.getByLabel('Income amount', { exact: true }).fill('15.00');
+  await income.getByRole('button', { name: 'Save income', exact: true }).click();
+  await expect(income.getByLabel('Monthly income totals')).toContainText('515.00');
+  await income.getByRole('button', { name: 'Archive income Extra receipt', exact: true }).click();
+  await income.getByRole('button', { name: 'Confirm archive', exact: true }).click();
+  await expect(income.getByLabel('Monthly income totals')).toContainText('500.00');
+
+  const overview = page.getByRole('region', { name: 'Household trends' });
+  await overview.getByLabel('History through', { exact: true }).fill('2026-11-04');
+  await overview.getByRole('button', { name: 'Apply date', exact: true }).click();
+  await overview.getByRole('button', { name: '36M', exact: true }).click();
+  const cashflow = overview.getByRole('slider', { name: /Household income and expenses by month/ });
+  await cashflow.focus();
+  await cashflow.press('Home');
+  // The source's earlier-year date is preserved rather than rewritten from the filename.
+  await overview.getByText('View monthly cash flow', { exact: true }).click();
+  await expect(overview.getByRole('row').filter({ hasText: 'Jul 2024' })).toContainText('284.35');
+  await overview.getByText('View monthly cash flow', { exact: true }).click();
+  await overview.screenshot({ path: testInfo.outputPath('historical-cashflow.png') });
+
+  await importer.getByRole('button', { name: 'Preview workbook' }).click();
+  await expect(importer.getByLabel('Budget workbook review')).toContainText('6 already imported');
+  await importer.getByLabel(/I reviewed the dates/).check();
+  await expect(importer.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+  await upload(true);
+  await importer.getByRole('button', { name: 'Preview workbook' }).click();
+  await expect(importer.getByRole('alert').filter({ hasText: 'Fix all' })).toContainText(
+    'Expenses row 2',
+  );
+  await importer.getByLabel(/I reviewed the dates/).check();
+  await expect(importer.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  expect(errors).toEqual([]);
+});
+
+test('overview combines household history, separates currencies and refreshes charts after expenses', async ({
+  page,
+}, testInfo) => {
+  const api = createApiClient('http://127.0.0.1:3101');
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const home = await api.createHousehold('Together household', 'CAD');
+  const alex = await api.addMember(home.id, 'Alex');
+  const sam = await api.addMember(home.id, 'Sam');
+  const now = new Date();
+  const date = (offset: number) =>
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1)).toISOString();
+  const month = (offset: number) => date(offset).slice(0, 7);
+  const plans = [
+    {
+      name: 'Alex TFSA',
+      type: 'INVESTMENT',
+      subtype: 'TFSA',
+      memberId: alex.id,
+      before: '1000.00',
+      after: '1200.00',
+    },
+    {
+      name: 'Sam DCPP',
+      type: 'INVESTMENT',
+      subtype: 'DCPP',
+      memberId: sam.id,
+      before: '2000.00',
+      after: '2300.00',
+    },
+    { name: 'Shared savings', type: 'SAVINGS', before: '500.00', after: '600.00' },
+    { name: 'Shared loan', type: 'LOAN', before: '100.00', after: '80.00' },
+    { name: 'USD savings', type: 'SAVINGS', currency: 'USD', before: '50.00', after: '60.00' },
+  ] as const;
+  for (const { before, after, ...input } of plans) {
+    const account = await api.addAccount(home.id, input);
+    await api.addBalance(home.id, account.id, before, date(-12));
+    await api.addBalance(home.id, account.id, after, date(0));
+  }
+  const food = await api.addExpenseCategory(home.id, 'Groceries');
+  for (const input of [
+    {
+      name: 'Alex groceries',
+      amount: '10.10',
+      categoryId: food.id,
+      memberId: alex.id,
+      startDate: `${month(0)}-01`,
+    },
+    {
+      name: 'Sam groceries',
+      amount: '20.20',
+      categoryId: food.id,
+      memberId: sam.id,
+      startDate: `${month(0)}-01`,
+    },
+    { name: 'Prior spending', amount: '50.00', startDate: `${month(-1)}-01` },
+    { name: 'USD spending', amount: '99.00', currency: 'USD', startDate: `${month(0)}-01` },
+  ])
+    await api.addExpense(home.id, input);
+  await page.addInitScript((id) => localStorage.setItem('studious.householdId', id), home.id);
+  await page.goto('/');
+  const overview = page.getByRole('region', { name: 'Household trends' });
+  const net = overview.getByRole('slider', { name: /Household net worth by month/ });
+  await net.focus();
+  await net.press('End');
+  await expect(net).toHaveAttribute('aria-valuetext', /Household net worth CAD\s4,020\.00/);
+  await expect(overview.locator('.kpi').first()).toContainText('+CAD 620.00');
+  await net.press('Home');
+  await expect(net).toHaveAttribute('aria-valuetext', /Household net worth CAD\s3,400\.00/);
+  await overview.getByRole('button', { name: 'Debts', exact: true }).click();
+  await expect(overview.getByRole('button', { name: 'Debts', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await overview.getByRole('button', { name: 'Debts', exact: true }).click();
+  const investments = overview.getByRole('slider', { name: /Household investments by month/ });
+  await investments.focus();
+  await investments.press('End');
+  await expect(investments).toHaveAttribute('aria-valuetext', /Investments CAD\s3,500\.00/);
+  const allocation = overview.getByRole('img', { name: /Household asset allocation/ });
+  await expect(allocation).toHaveAttribute('aria-label', /TFSA CAD\s1,200\.00/);
+  await expect(allocation).toHaveAttribute('aria-label', /DCPP CAD\s2,300\.00/);
+  const spending = overview.getByRole('slider', { name: /Household spending by month/ });
+  await spending.focus();
+  await spending.press('End');
+  await expect(spending).toHaveAttribute('aria-valuetext', /Recorded spending CAD\s30\.30/);
+  const owners = overview.getByRole('slider', { name: /Net worth by household member/ });
+  await owners.focus();
+  await owners.press('End');
+  await expect(owners).toHaveAttribute(
+    'aria-valuetext',
+    /Shared household: Net worth CAD\s520\.00/,
+  );
+  await overview.getByRole('button', { name: '6M', exact: true }).click();
+  await expect(net).toHaveAttribute('aria-valuemax', '5');
+  await overview.getByRole('button', { name: '24M', exact: true }).click();
+  await expect(net).toHaveAttribute('aria-valuemax', '23');
+  await overview.getByRole('button', { name: '12M', exact: true }).click();
+  await overview.getByLabel('Chart currency').selectOption('USD');
+  await net.focus();
+  await net.press('End');
+  await expect(net).toHaveAttribute('aria-valuetext', /Household net worth USD\s60\.00/);
+  await spending.focus();
+  await spending.press('End');
+  await expect(spending).toHaveAttribute('aria-valuetext', /Recorded spending USD\s99\.00/);
+  await overview.getByLabel('Chart currency').selectOption('');
+
+  const expenses = page.getByRole('region', { name: 'Household expenses' });
+  await expenses.getByRole('button', { name: '+ Add expense' }).click();
+  await expenses.getByLabel('Expense name', { exact: true }).fill('Shared bus fare');
+  await expenses.getByLabel('Expense amount', { exact: true }).fill('5.00');
+  await expenses.getByLabel('Expense date', { exact: true }).fill(`${month(0)}-01`);
+  await expenses.getByRole('button', { name: 'Save expense', exact: true }).click();
+  await expect(expenses.getByRole('alert')).toContainText('Expense saved.');
+  await expect(spending).toBeVisible();
+  await spending.focus();
+  await spending.press('End');
+  await expect(spending).toHaveAttribute('aria-valuetext', /Recorded spending CAD\s35\.30/);
+  await spending.evaluate((element) => (element as HTMLElement).blur());
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await overview.screenshot({ path: testInfo.outputPath('overview.png') });
+
+  await page.getByRole('button', { name: /Shared loan.*80\.00/ }).click();
+  await page.getByLabel('Balance (CAD)', { exact: true }).fill('6000.00');
+  await page.getByLabel('Observed at (local time)').fill(`${month(0)}-01T12:00`);
+  await page.getByRole('button', { name: 'Record balance', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Balance recorded.' })).toBeVisible();
+  await net.focus();
+  await net.press('End');
+  await expect(net).toHaveAttribute('aria-valuetext', /Household net worth -CAD\s1,900\.00/);
+  await expect(net.locator('.zero-line')).toHaveCount(1);
+
+  await page.route('**/overview?*', (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'History temporarily unavailable' }),
+    }),
+  );
+  await page.reload();
+  await expect(overview.getByRole('alert')).toContainText('History temporarily unavailable');
+  await page.unroute('**/overview?*');
+  await overview.getByRole('button', { name: 'Retry charts' }).click();
+  await expect(net).toBeVisible();
+  expect(errors).toEqual([]);
 });
 
 test('household, member, account, balance, reload, edit and archive work with the live SQLite API', async ({

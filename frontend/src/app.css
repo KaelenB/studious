@@ -855,32 +855,11 @@ footer {
 }
 .mortgage-chart {
   margin: 0 0 1.5rem;
-  --series-balance: #1d6251;
-  --series-baseline: #7b8d88;
-  --series-equity: #b7791f;
-  --series-property: #d9a441;
-  --series-principal: #2b6cb0;
-  --series-interest: #c0392b;
 }
-.mortgage-chart .series-balance {
-  --series: var(--series-balance);
+.time-chart {
+  margin: 0;
 }
-.mortgage-chart .series-baseline {
-  --series: var(--series-baseline);
-}
-.mortgage-chart .series-equity {
-  --series: var(--series-equity);
-}
-.mortgage-chart .series-property {
-  --series: var(--series-property);
-}
-.mortgage-chart .series-principal {
-  --series: var(--series-principal);
-}
-.mortgage-chart .series-interest {
-  --series: var(--series-interest);
-}
-.mortgage-legend {
+.chart-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
@@ -902,14 +881,23 @@ footer {
   text-decoration: line-through;
   opacity: 0.65;
 }
-.mortgage-chart .swatch {
+.time-chart .swatch,
+.donut-legend .swatch {
   display: inline-block;
   flex: none;
   width: 0.9rem;
   border-top: 3px solid var(--series);
 }
-.mortgage-chart .swatch.dashed {
+.time-chart .swatch.dashed {
   border-top-style: dashed;
+}
+.time-chart .swatch.block,
+.donut-legend .swatch {
+  height: 0.65rem;
+  width: 0.65rem;
+  border: 0;
+  border-radius: 0.15rem;
+  background: var(--series);
 }
 .chart-frame {
   display: grid;
@@ -936,38 +924,75 @@ footer {
   cursor: crosshair;
   border-bottom: 1px solid var(--line);
 }
+.chart-plot:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
 .chart-plot svg {
   display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
-.mortgage-chart .grid-line {
+.time-chart .grid-line {
   stroke: var(--line);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
-.mortgage-chart .balance-area {
-  fill: rgba(29, 98, 81, 0.14);
+.time-chart .grid-line.zero-line {
+  stroke: #9aaba6;
 }
-.mortgage-chart .series-line {
+.time-chart .series-area {
+  fill: var(--series);
+  fill-opacity: 0.14;
+}
+.time-chart .series-band {
+  fill: var(--series);
+  fill-opacity: 0.55;
+}
+.time-chart .series-bar {
+  fill: var(--series);
+  transition: opacity 0.15s;
+}
+.time-chart .series-bar.faded {
+  opacity: 0.35;
+}
+.time-chart .series-bar.negative {
+  fill: #c0392b;
+}
+.chart-data {
+  margin-top: 0.8rem;
+  font-size: 0.8rem;
+}
+.chart-data summary {
+  cursor: pointer;
+  color: var(--green);
+}
+.chart-data td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.time-chart .series-line {
   fill: none;
   stroke: var(--series);
   stroke-width: 2;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-.mortgage-chart .series-line.dashed {
+.time-chart .series-line.thin {
+  stroke-width: 1.25;
+}
+.time-chart .series-line.dashed {
   stroke-dasharray: 6 4;
   stroke-width: 1.5;
 }
-.mortgage-chart .today-line {
+.time-chart .today-line {
   stroke: var(--muted);
   stroke-width: 1;
   stroke-dasharray: 2 3;
   vector-effect: non-scaling-stroke;
 }
-.mortgage-chart .active-line {
+.time-chart .active-line {
   stroke: #253e3b;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
@@ -1013,6 +1038,12 @@ footer {
   padding-left: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
+.chart-tooltip .tooltip-total {
+  margin-top: 0.15rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
 @media (max-width: 640px) {
   .chart-tooltip,
   .chart-tooltip.flip {
@@ -1023,11 +1054,198 @@ footer {
     transform: none;
   }
 }
-.mortgage-chart figcaption {
+.time-chart figcaption {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   margin: 0.35rem 0 0 3.7rem;
+}
+.time-chart figcaption span:nth-child(2) {
+  text-align: center;
+}
+.chart-category-axis {
+  display: grid;
+  margin: 0.4rem 0 0 3.7rem;
+  text-align: center;
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+.time-chart figcaption.caption-only {
+  justify-content: center;
+  text-align: center;
+}
+.donut-chart {
+  display: grid;
+  grid-template-columns: minmax(8rem, 11rem) 1fr;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0;
+}
+.donut-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.donut-chart circle {
+  fill: none;
+  stroke-width: 14;
+}
+.donut-chart .donut-track {
+  stroke: #eef3f1;
+}
+.donut-chart .donut-slice {
+  stroke: var(--series);
+  transition: stroke-width 0.15s;
+}
+.donut-chart .donut-slice.active {
+  stroke-width: 18;
+}
+.donut-chart .donut-center {
+  font-size: 0.55rem;
+  fill: var(--muted);
+}
+.donut-chart .donut-total {
+  font-size: 0.8rem;
+  font-weight: 700;
+  fill: #253e3b;
+}
+.donut-legend {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+}
+.donut-legend li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.4rem;
+}
+.donut-legend li.active {
+  background: #f1f6f4;
+}
+.donut-legend .donut-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.donut-legend .donut-share {
+  min-width: 3rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .donut-chart {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .donut-chart svg {
+    max-width: 11rem;
+  }
+  .donut-legend {
+    width: 100%;
+  }
+}
+.trends-section {
+  margin-bottom: 1.5rem;
+}
+.trends-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.range-group {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.15rem;
+}
+.range-group button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.7rem;
+}
+.range-group button[aria-pressed='true'] {
+  background: #1d6251;
+  color: #fff;
+}
+.trends-controls select {
+  width: auto;
+  min-width: 5.2rem;
+  padding: 0.3rem 2rem 0.3rem 0.65rem;
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.kpi {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: #fff;
+  padding: 0.75rem 0.9rem;
+}
+.kpi strong {
+  display: block;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.kpi .up {
+  color: #1d6251;
+}
+.kpi .down {
+  color: #c0392b;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.chart-card {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.chart-card.wide {
+  grid-column: 1 / -1;
+}
+.ledger-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.8rem;
+}
+.import-review-table {
+  max-height: 24rem;
+}
+.import-review-table td {
+  min-width: 7rem;
+  overflow-wrap: anywhere;
+}
+.import-review-table thead {
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+.chart-card h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+.chart-card .chart-intro {
+  margin: 0.15rem 0 0.85rem;
+}
+@media (max-width: 900px) {
+  .chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .mortgage-subheading {
   font-size: 1rem;

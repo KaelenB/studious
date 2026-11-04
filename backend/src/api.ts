@@ -17,7 +17,19 @@ import { createMortgageRepository } from './repositories/mortgages.js';
 import { createMortgageService } from './services/mortgages.js';
 import { createMortgageController } from './controllers/mortgages.js';
 import { registerMortgageRoutes } from './routes/mortgages.js';
+import { createOverviewRepository } from './repositories/overview.js';
+import { createOverviewService } from './services/overview.js';
+import { createOverviewController } from './controllers/overview.js';
+import { registerOverviewRoutes } from './routes/overview.js';
 import type { DocumentExtractors } from './services/extractors.js';
+import { createIncomeRepository } from './repositories/income.js';
+import { createIncomeService } from './services/income.js';
+import { createIncomeController } from './controllers/income.js';
+import { registerIncomeRoutes } from './routes/income.js';
+import { createBudgetRepository } from './repositories/budget.js';
+import { createBudgetService } from './services/budget.js';
+import { createBudgetController } from './controllers/budget.js';
+import { registerBudgetRoutes } from './routes/budget.js';
 
 /**
  * Registers every API route on a Fastify-compatible router. It is platform neutral so the same
@@ -47,6 +59,21 @@ export function registerApi(
   registerMortgageRoutes(
     app,
     createMortgageController(createMortgageService(createMortgageRepository(db), service)),
+    service,
+  );
+  registerOverviewRoutes(
+    app,
+    createOverviewController(createOverviewService(createOverviewRepository(db), service)),
+    service,
+  );
+  registerIncomeRoutes(
+    app,
+    createIncomeController(createIncomeService(createIncomeRepository(db))),
+    service,
+  );
+  registerBudgetRoutes(
+    app,
+    createBudgetController(createBudgetService(createBudgetRepository(db), extractors)),
     service,
   );
   return app;

@@ -7,7 +7,7 @@ environment settings, or credentials.
 
 ## Use in this repository
 
-Both backend and frontend depend on `@studious/api` at version `0.9.0`. npm
+Both backend and frontend depend on `@studious/api` at version `0.11.0`. npm
 workspaces link the package locally during `npm ci`; nothing is published or
 downloaded from a private registry.
 
@@ -44,14 +44,40 @@ Mortgage accounts use `mortgage(householdId, accountId, asOf?, signal?)`,
 describe valid input; `MortgageTermsInput`, `MortgageProjection`, and `Prepayment`
 type the payloads. See the [API guide](../README.md#mortgages).
 
+`overview(householdId, months = 12, asOf?, signal?)` returns an `Overview`:
+chronological `months` (`YYYY-MM`), active-account `{ accountId, balances }`
+series aligned to those months, and expense totals grouped by month, currency,
+category and member. `months` accepts 1–120. Each balance is the latest
+observation at month-end, carried forward, or `null` before the first
+observation. The last month is capped at `asOf` (default: today, UTC), not
+extrapolated. Expense totals include all active expenses through that day,
+not only one page. Metadata comes from `accounts`, `members` and
+`expenseCategories`. See the [overview guide](../README.md#household-overview).
+
 The client also exposes `expenseCategories`, `addExpenseCategory`, `expenses`,
 `addExpense`, `updateExpense`, and `archiveExpense`. Expense requests and
 responses use the exported `ExpenseInput`, `ExpenseUpdate`, `Expense`,
 `ExpenseCategory`, and `ExpensePage` types and their Zod schemas.
 `expenses(householdId, '2026-01', 20, 0, signal)` returns paginated `items` plus
 full-month `totals` per currency. `startDate` is a calendar date, not a timestamp.
-Expense amounts must be positive. See the [API guide](../README.md#one-off-expenses)
+Expense amounts must be non-zero; negative values represent refunds and reduce
+monthly totals. See the [API guide](../README.md#one-off-expenses)
 for constraints and semantics.
+
+`income`, `addIncome`, `updateIncome` and `archiveIncome` manage positive dated
+receipts, with the same month/pagination and household-member conventions as
+expenses (no category). Types: `Income`, `IncomeInput`, `IncomeUpdate`,
+`IncomePage`. The overview includes monthly `income` totals; its expense totals
+may now be negative.
+
+`previewBudget(id, blob, filename, currency, signal?)` returns `BudgetPreview`
+with source rows, exact totals, warnings, row issues, owner names and duplicate
+status. `importBudget(id, blob, filename, currency, preview.sha256, members)`
+returns counts `{ expenses, income, duplicates }`. `BudgetMemberMapping` maps
+each source owner to a household member UUID, `'CREATE'`, or `null` (shared).
+Invalid rows block all writes; the confirmation hash must match the upload.
+See the [history guide](../README.md#historical-budgets-and-dated-income) for
+precision, date and duplicate rules.
 
 Sun Life imports use `previewStatement(householdId, accountId, filename, blob,
 signal?)` and `importStatement(householdId, accountId, filename, blob)`. Both send
@@ -103,7 +129,7 @@ npm pack --workspace @studious/api --pack-destination .
 ```
 
 The `prepack` hook builds JavaScript and `.d.ts` declarations. The resulting
-`studious-api-0.9.0.tgz` can be installed into a separate frontend project with
+`studious-api-0.11.0.tgz` can be installed into a separate frontend project with
 `npm install <path-to-tarball>`. Only compiled distribution files, package metadata,
 and this guide are included. `zod` is the sole runtime dependency. No registry
 publish step is performed by this project.

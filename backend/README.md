@@ -215,12 +215,35 @@ All routes accept/return JSON unless the response is `204`.
 | POST       | `/households/{householdId}/accounts/{accountId}/mortgage/prepayments`                | Add a lump-sum prepayment `{ "amount", "date", "note" }`; `201`              |
 | DELETE     | `/households/{householdId}/accounts/{accountId}/mortgage/prepayments/{prepaymentId}` | Delete a prepayment; `204`                                                   |
 
+### Household overview
+
+`GET /households/{householdId}/overview?months=12&asOf=2026-11-04` returns
+`{ months, accounts, expenses }`. `months` accepts 1–120 (default 12); `asOf`
+is an optional calendar date (default today, UTC). Windows must start in year
+1000 or later. The household must exist, otherwise the endpoint returns 404.
+
+`months` is chronological `YYYY-MM`. Each active account has
+`{ accountId, balances }`, with one amount per month: the latest snapshot
+strictly before the next month, capped at the end of `asOf` for the final
+month. Equal-time observations use descending snapshot ID, like balance
+history. Earlier observations carry forward; months before the first
+observation are `null`, not zero. Future snapshots are excluded.
+Archived accounts are excluded throughout the window. Ownership and plan
+classifications use current account metadata.
+
+`expenses` contains exact totals `{ month, currency, categoryId, memberId,
+amount }` for active expenses from the first month through `asOf`, inclusive.
+Totals are not paginated; currencies are never converted or merged.
+Mortgage projections and property values are not automatically inserted into
+history; record a mortgage balance snapshot to include it.
+
 ### One-off expenses
 
 Expense input is `{ "name": "Groceries", "amount": "42.15", "currency": "CAD",
 "startDate": "2026-01-31", "categoryId": null, "memberId": null }`.
 Currency defaults to CAD on creation; member/category are optional and nullable.
-Amounts must be positive decimal strings with exactly two places, up to
+Amounts must be non-zero signed decimal strings with exactly two places (negative
+for refunds), up to an absolute
 `999999999999.99`. Dates are calendar dates (`YYYY-MM-DD`, years 1000–9999), not
 timestamps. Patches only change explicitly supplied fields; currency, amount,
 date, name, category, and member can be corrected.
@@ -236,6 +259,65 @@ Category names are trimmed and unique within each household (case-sensitive).
 Cross-household member/category references are rejected by composite foreign
 keys. Category rename/delete, recurrence rules, payment status, and tags are not
 implemented. Recording or archiving an expense does not change account balances.
+
+### Historical budgets and dated income
+
+Income supports `GET /households/{householdId}/income?month=YYYY-MM&limit=20&offset=0`,
+`POST /income`, `PATCH /income/{incomeId}`, and `DELETE /income/{incomeId}`
+(all relative to the household). Inputs are `{ name, amount, currency,
+startDate, memberId? }`: positive two-place amounts, actual calendar dates,
+optional household member. Listing returns paginated `items` and full-month
+per-currency `totals`. Archives stay stored and are excluded from reports.
+This models receipts, not recurring gross income/deductions. Entries do not
+change account balances.
+
+Upload raw XLSX bytes (Excel Content-Type, at most 10 MiB):
+
+- `POST /households/{householdId}/budget-imports/preview?filename=Budget.xlsx&currency=CAD`
+- `POST /households/{householdId}/budget-imports?filename=Budget.xlsx&currency=CAD&sha256=...&members=...`
+
+Confirmation uses the preview SHA-256 and a URL-encoded JSON member mapping:
+`{ "Spreadsheet Name": "<household-member-uuid>" | "CREATE" | null }`.
+`CREATE` reuses a unique case-insensitive name match or creates that member;
+`null` attributes entries to the shared household. Foreign/ambiguous mappings
+are rejected, never silently attributed.
+
+Only the two transaction sheets are read, at most 10,000 rows and 40 columns
+per sheet; parsing retains the existing isolated-process memory/time/output
+limits. Required headers:
+
+| Sheet    | Headers                                    |
+| -------- | ------------------------------------------ |
+| Expenses | Date, Cost, Description, Category, Paid By |
+| Income   | Date, Amount, Description, Whose           |
+
+Blank transaction rows and extra helper columns are ignored, never summary
+tabs. Missing categories remain uncategorized. Invalid populated rows are
+reported with sheet/row and block the entire import. Exact decimal arithmetic
+rounds excess precision to the nearest cent, half away from zero, with warnings.
+Dates outside a year in the filename are warned about and **preserved**, not
+rewritten. Negative expenses stay expense refunds, not income. Income descriptions
+such as savings or reimbursements are retained without salary classification.
+
+Preview writes nothing and includes rows, issues, warnings, duplicate status,
+source totals, currency and member names. Confirmation reparses and verifies
+the hash, validates every member against the household, then creates required
+categories, members, transactions and provenance in one transaction. Re-imports
+skip identical imported rows even across renamed or overlapping workbooks.
+Identical repeated rows within one sheet are preserved by occurrence number.
+Edited source rows are new transactions, so correct existing records in the app
+rather than re-importing changes. Manual records are not auto-matched. Archived
+imports remain deduplicated. Provenance retains filename/hash/sheet/row and
+record ID, not original XLSX bytes.
+
+The overview also returns `income` totals grouped by month/currency/member.
+Expense totals are signed and net of refunds. The frontend compares income,
+net spending and recorded surplus without inventing account-balance history.
+
+Personal workbooks under `docs/historical/` are ignored by Git and are not
+seeded into any database automatically. Back up the central database before
+deploying; startup applies the generated migration, preserving existing
+expense records while enabling refunds and adding income/import tables.
 
 ### Mortgages
 

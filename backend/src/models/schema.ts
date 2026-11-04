@@ -199,7 +199,7 @@ export const expenses = sqliteTable(
     }),
     check('expenses_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
     moneyCheck('expenses_amount_format', table.amount),
-    check('expenses_amount_positive', sql`CAST(${table.amount} AS REAL) > 0`),
+    check('expenses_amount_nonzero', sql`CAST(${table.amount} AS REAL) != 0`),
     currencyCheck('expenses_currency_format', table.currency),
     check('expenses_start_date_format', sql`date(${table.startDate}) IS ${table.startDate}`),
     index('expenses_household_date_idx').on(table.householdId, table.startDate, table.id),
@@ -208,6 +208,55 @@ export const expenses = sqliteTable(
 
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
+
+export const income = sqliteTable(
+  'income',
+  {
+    id: id(),
+    householdId: text('household_id')
+      .notNull()
+      .references(() => households.id),
+    memberId: text('member_id'),
+    name: text('name').notNull(),
+    amount: money('amount'),
+    currency: text('currency').notNull().default('CAD'),
+    startDate: text('start_date').notNull(),
+    ...timestamps(),
+    deletedAt: instant('deleted_at'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'income_member_household_fk',
+      columns: [table.householdId, table.memberId],
+      foreignColumns: [members.householdId, members.id],
+    }),
+    check('income_name_not_blank', sql`length(trim(${table.name})) BETWEEN 1 AND 200`),
+    moneyCheck('income_amount_format', table.amount),
+    check('income_amount_positive', sql`CAST(${table.amount} AS REAL) > 0`),
+    currencyCheck('income_currency_format', table.currency),
+    check('income_start_date_format', sql`date(${table.startDate}) IS ${table.startDate}`),
+    index('income_household_date_idx').on(table.householdId, table.startDate, table.id),
+  ],
+);
+export type Income = typeof income.$inferSelect;
+
+export const budgetImportRows = sqliteTable(
+  'budget_import_rows',
+  {
+    id: id(),
+    householdId: text('household_id')
+      .notNull()
+      .references(() => households.id),
+    key: text('key').notNull(),
+    fileHash: text('file_hash').notNull(),
+    filename: text('filename').notNull(),
+    sheet: text('sheet', { enum: ['Expenses', 'Income'] }).notNull(),
+    row: integer('row').notNull(),
+    recordId: text('record_id').notNull(),
+    ...timestamps(),
+  },
+  (table) => [unique('budget_import_rows_household_key_unique').on(table.householdId, table.key)],
+);
 
 // Portable blob column: Drizzle's buffer mode depends on Node's Buffer, which browsers lack.
 const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
