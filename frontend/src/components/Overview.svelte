@@ -1,9 +1,17 @@
 <script lang="ts">
   import { Alert, Button, Card, Form, Input, Label, Spinner } from '@sveltestrap/sveltestrap';
-  import type { Account, ExpenseCategory, Member, Overview } from '@studious/api';
+  import type { Account, ExpenseCategory, Member, Overview, InvestmentMarket } from '@studious/api';
   import { api, errorMessage } from '../lib/api';
   import { formatMoney } from '../lib/money';
-  import { chartColor, householdTrends, monthLabel, netChange } from '../lib/overview';
+  import {
+    chartColor,
+    householdTrends,
+    monthLabel,
+    netChange,
+    netWorthProjection,
+    investmentProjection,
+  } from '../lib/overview';
+  import { cents } from '../lib/money';
   import TimeChart, { type ChartSeries } from './TimeChart.svelte';
   import DonutChart from './DonutChart.svelte';
 
@@ -28,6 +36,19 @@
   let retry = $state(0);
   let range = $state(12);
   let selectedCurrency = $state('');
+  let forecastMonths = $state(12);
+  let forecastMode = $state('automatic');
+  let monthlyAssumption = $state('0.00');
+  let assumptionInput = $state('0.00');
+  let annualReturn = $state(5);
+  let returnInput = $state<number | undefined>(5);
+  let contribution = $state('0.00');
+  let contributionInput = $state('0.00');
+  let market = $state<InvestmentMarket | null>(null);
+  let marketBusy = $state(false);
+  let marketError = $state('');
+  let marketApplied = $state(false);
+  let marketController: AbortController | undefined;
   const today = new Date().toISOString().slice(0, 10);
   let through = $state(today);
   let throughInput = $state(today);
@@ -43,6 +64,67 @@
   );
   const currency = $derived(
     currencies.includes(selectedCurrency) ? selectedCurrency : defaultCurrency,
+  );
+  const projectionReturn = $derived(
+    marketApplied && market?.annualReturn !== null && market?.annualReturn !== undefined
+      ? market.annualReturn
+      : annualReturn,
+  );
+  $effect(() => {
+    void householdId;
+    void currency;
+    void through;
+    void revision;
+    market = null;
+    marketError = '';
+    marketApplied = false;
+    marketBusy = false;
+    return () => marketController?.abort();
+  });
+  async function loadMarket() {
+    marketController?.abort();
+    const controller = new AbortController();
+    marketController = controller;
+    marketBusy = true;
+    marketError = '';
+    marketApplied = false;
+    market = null;
+    try {
+      const result = await api.investmentMarket(householdId, through, currency, controller.signal);
+      if (controller.signal.aborted) return;
+      market = result;
+      marketApplied = result.annualReturn !== null;
+      if (!marketApplied)
+        marketError =
+          'No usable weighted market return was found. The manual growth assumption remains in use; review the holdings below.';
+    } catch (cause) {
+      if (!controller.signal.aborted) marketError = errorMessage(cause);
+    } finally {
+      if (!controller.signal.aborted) marketBusy = false;
+    }
+  }
+  const investmentForecast = $derived(
+    data
+      ? investmentProjection(
+          data,
+          accounts,
+          currency,
+          forecastMonths,
+          projectionReturn,
+          cents(contribution),
+        )
+      : null,
+  );
+  const forecast = $derived(
+    data
+      ? netWorthProjection(
+          data,
+          accounts,
+          currency,
+          forecastMonths,
+          forecastMode === 'manual' ? cents(monthlyAssumption) : undefined,
+        )
+      : null,
   );
   const trends = $derived(
     data ? householdTrends(data, accounts, members, categories, currency) : null,
@@ -75,6 +157,41 @@
       dashed: true,
       values: points.map((point) => number(point.debts)),
     },
+  ]);
+  const netForecast = $derived(
+    forecast
+      ? {
+          ...forecast,
+          points: forecast.points.map((point, index) => ({
+            ...point,
+            net: point.net + (investmentForecast?.points[index]?.gains ?? 0n),
+          })),
+        }
+      : null,
+  );
+  const netLabels = $derived([
+    ...labels,
+    ...(forecast?.points.slice(1).map((point) => `${monthLabel(point.month)} (projected)`) ?? []),
+  ]);
+  const projectedSeries = $derived<ChartSeries[]>([
+    ...netSeries.map((series) => ({
+      ...series,
+      values: [...series.values, ...(forecast?.points.slice(1).map(() => null) ?? [])],
+    })),
+    ...(forecast
+      ? [
+          {
+            key: 'forecast',
+            label: 'Projected net worth',
+            color: '#8556a5',
+            dashed: true,
+            values: [
+              ...points.slice(0, -1).map(() => null),
+              ...netForecast!.points.map((point) => Number(point.net)),
+            ],
+          },
+        ]
+      : []),
   ]);
   const growth = $derived.by(() => {
     if (!trends || !data) return [];
@@ -179,6 +296,11 @@
         class="form-select form-select-sm"
         aria-label="Chart currency"
         bind:value={selectedCurrency}
+        onchange={() => {
+          forecastMode = 'automatic';
+          contribution = '0.00';
+          contributionInput = '0.00';
+        }}
       >
         <option value="">{defaultCurrency}</option>
         {#each currencies.filter((code) => code !== defaultCurrency) as code}
@@ -296,9 +418,95 @@
           assets.
         </p>
         {#if known}
+          <div class="forecast-controls d-flex flex-wrap gap-3 align-items-end mb-3">
+            <div>
+              <Label for="forecast-horizon">Project ahead</Label>
+              <select id="forecast-horizon" class="form-select" bind:value={forecastMonths}>
+                {#each [12, 24, 36, 60] as months}<option value={months}>{months} months</option
+                  >{/each}
+              </select>
+            </div>
+            <div>
+              <Label for="forecast-mode">Projection basis</Label>
+              <select id="forecast-mode" class="form-select" bind:value={forecastMode}>
+                <option value="automatic">Recent recorded cash flow</option>
+                <option value="manual">Custom monthly change</option>
+              </select>
+            </div>
+          </div>
+          {#if forecastMode === 'manual'}
+            <Form
+              class="forecast-controls d-flex flex-wrap gap-2 align-items-end mb-3"
+              on:submit={(event: SubmitEvent) => {
+                event.preventDefault();
+                monthlyAssumption = assumptionInput;
+              }}
+            >
+              <div>
+                <Label for="forecast-change">Monthly net-worth change ({currency})</Label>
+                <Input
+                  id="forecast-change"
+                  type="text"
+                  inputmode="decimal"
+                  required
+                  pattern={'-?(?:0|[1-9][0-9]{0,11})\\.[0-9]{2}'}
+                  bind:value={assumptionInput}
+                />
+              </div>
+              <Button type="submit" color="primary" outline>Apply assumption</Button>
+            </Form>
+          {/if}
+          {#if forecast}
+            {#if forecast.missingAccounts}
+              <Alert color="warning" fade={false}>
+                Partial net-worth projection: {forecast.missingAccounts}
+                {currency} account(s) have no recorded balance as of {through}. Only known balances
+                are projected; missing assets or debts are excluded, not assumed to be zero.
+              </Alert>
+            {/if}
+            {#if !investmentForecast && accounts.some((account) => account.currency === currency && account.type === 'INVESTMENT')}
+              <p class="muted small">
+                Investment growth is not included: every {currency} investment account needs a non-negative
+                recorded balance. The cash-flow projection still extends into the future.
+              </p>
+            {/if}
+            <p class="muted small" role="status">
+              Projection: {money(netForecast!.points.at(-1)!.net)} by {monthLabel(
+                forecast.points.at(-1)!.month,
+              )}, using {money(forecast.monthlyChange)} per month.
+              {#if forecast.basis === 'cashflow'}
+                Average recorded income less expenses across {forecast.sampleMonths.length} completed
+                months with both income and expense records in the trailing 12-month window. Months without
+                both are excluded; the selected through-month is excluded.
+              {:else if forecast.basis === 'flat'}
+                Fewer than three completed months have both income and expense records in the
+                trailing 12 months. Cash-flow change is held at zero; investment growth assumptions
+                below still apply.
+              {:else}
+                Uses your custom monthly change, not an estimated return.
+              {/if}
+              Starts from the latest recorded balances as of {through}; each future point adds one
+              monthly change plus projected investment gains using the assumptions below.
+              Contributions are transfers from household cash, not extra net worth. If your custom
+              monthly change already includes investment returns, set the annual growth assumption
+              to zero to avoid counting them twice. Assumes the same accounts and currency, with no
+              inflation or separate mortgage amortization. Transfers, missing activity and principal
+              payments in expenses can distort recorded surplus. This is a scenario, not a financial
+              prediction.
+            </p>
+          {:else}
+            <p class="muted small">
+              Record at least one {currency} account balance to enable a projection.
+            </p>
+          {/if}
           <TimeChart
-            {labels}
-            series={netSeries}
+            labels={netLabels}
+            axisLabels={[
+              labels[0] ?? '',
+              forecast ? monthLabel(forecast.points.at(-1)!.month) : (labels.at(-1) ?? ''),
+            ]}
+            series={projectedSeries}
+            marker={points.length - 1}
             {currency}
             ariaLabel="Household net worth by month"
             caption="Hover, tap or use arrow keys for monthly values"
@@ -327,6 +535,27 @@
               </table>
             </div>
           </details>
+          {#if forecast}
+            <details class="chart-data">
+              <summary>View projected values</summary>
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <thead
+                    ><tr><th scope="col">Month</th><th scope="col">Projected net worth</th></tr
+                    ></thead
+                  >
+                  <tbody
+                    >{#each netForecast!.points.slice(1) as point}
+                      <tr
+                        ><th scope="row">{monthLabel(point.month)}</th><td>{money(point.net)}</td
+                        ></tr
+                      >
+                    {/each}</tbody
+                  >
+                </table>
+              </div>
+            </details>
+          {/if}
         {:else}
           <p class="muted">
             Record a balance to start your household history. Missing observations are not zero
@@ -339,9 +568,154 @@
         <p class="muted small chart-intro">
           TFSA, DCPP and all other investment plans, combined across members.
         </p>
+        <Button color="primary" outline disabled={marketBusy} on:click={loadMarket}>
+          {marketBusy ? 'Loading market history...' : 'Load market-based projection'}
+        </Button>
+        <p class="muted small mt-2">
+          Fetches public stock/ETF history for explicit tickers in each account's latest imported
+          statement as of {through}. Only tickers and dates leave the server, not balances, names or
+          documents. CAD tickers without a recognized exchange suffix are tried on Toronto (.TO);
+          verify the returned security name. No name-based fund matching.
+        </p>
+        {#if marketError}<Alert color="warning" fade={false}>{marketError}</Alert>{/if}
+        {#if market}
+          <p class="muted small">
+            {market.source} · Retrieved {market.fetchedAt}. Matched {market.coveragePercent.toFixed(
+              1,
+            )}% of recorded investment balances.
+            {#if market.annualReturn !== null}
+              Weighted historical annual growth: {market.annualReturn.toFixed(2)}%.
+              {marketApplied
+                ? 'Applied to both investment and net-worth forecasts.'
+                : 'Manual assumption currently applied.'}
+            {/if}
+            Uses up to five years of adjusted daily closes (minimum three years), not an expected return.
+            Latest price is the last daily close available through the selected date (excluding today's
+            incomplete session), not a live quote. Statement proportions are scaled to recorded account
+            balances; holdings may have changed. Unmatched holdings, cash and currency-mismatched positions
+            contribute zero assumed growth, not a fabricated market return. No FX conversion. Yahoo's
+            unofficial API may be unavailable.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-sm" aria-label="Market holdings">
+              <thead
+                ><tr
+                  ><th scope="col">Holding / ticker</th><th scope="col">Statement</th><th
+                    scope="col">Projection weight</th
+                  ><th scope="col">Last close</th><th scope="col">Historical annual return</th><th
+                    scope="col">History / status</th
+                  ></tr
+                ></thead
+              >
+              <tbody>
+                {#each market.holdings as holding}
+                  <tr>
+                    <th scope="row" class="text-break"
+                      >{holding.name}<br />{holding.symbol ??
+                        'No ticker'}{#if holding.marketName}<br />{holding.marketName}{/if}</th
+                    >
+                    <td
+                      >{accounts.find((account) => account.id === holding.accountId)?.name}<br
+                      />{holding.statementDate ?? 'No statement'}</td
+                    >
+                    <td>{holding.weightPercent.toFixed(1)}%</td>
+                    <td
+                      >{holding.price === null
+                        ? 'Unavailable'
+                        : `${holding.priceCurrency} ${holding.price.toFixed(2)}`}<br
+                      />{holding.priceDate ?? ''}</td
+                    >
+                    <td
+                      >{holding.annualReturn === null
+                        ? 'Unavailable'
+                        : `${holding.annualReturn.toFixed(2)}%`}</td
+                    >
+                    <td>{holding.error ?? `${holding.historyStart} to ${holding.priceDate}`}</td>
+                  </tr>
+                {:else}
+                  <tr
+                    ><td colspan="6">No imported investment holdings found in this currency.</td
+                    ></tr
+                  >
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+        <Form
+          class="forecast-controls d-flex flex-wrap gap-2 align-items-end mb-3"
+          on:submit={(event: SubmitEvent) => {
+            event.preventDefault();
+            if (returnInput === undefined) return;
+            annualReturn = returnInput;
+            contribution = contributionInput;
+            marketApplied = false;
+          }}
+        >
+          <div>
+            <Label for="investment-return">Annual investment growth (%)</Label>
+            <Input
+              id="investment-return"
+              type="number"
+              min={-100}
+              max={100}
+              step={0.1}
+              required
+              bind:value={returnInput}
+            />
+          </div>
+          <div>
+            <Label for="investment-contribution">Monthly investment contribution ({currency})</Label
+            >
+            <Input
+              id="investment-contribution"
+              type="text"
+              inputmode="decimal"
+              required
+              pattern={'(?:0|[1-9][0-9]{0,11})\\.[0-9]{2}'}
+              bind:value={contributionInput}
+            />
+          </div>
+          <Button type="submit" color="primary" outline>Apply investment assumptions</Button>
+        </Form>
+        <p class="muted small">
+          {marketApplied ? 'Market-history scenario:' : 'Illustrative manual scenario:'}
+          {projectionReturn.toFixed(2)}% effective annual growth, compounded monthly, plus {money(
+            cents(contribution),
+          )}
+          contributed at each month-end. Uses the shared {forecastMonths}-month horizon above. Not
+          inferred from your balances or guaranteed. No fees, taxes or inflation. Investment gains
+          also feed the net-worth projection; contributions are household transfers. Assumptions are
+          temporary and reset on reload.
+        </p>
+        {#if investmentForecast}
+          <p class="muted small" role="status">
+            Projected investments: {money(investmentForecast.points.at(-1)!.balance)} by
+            {monthLabel(investmentForecast.points.at(-1)!.month)}, including
+            {money(investmentForecast.points.at(-1)!.contributions)} future contributions and
+            {money(investmentForecast.points.at(-1)!.gains)} projected growth.
+          </p>
+        {:else}
+          <p class="muted small">
+            Record non-negative balances for every {currency} investment account to enable investment
+            projections.
+          </p>
+        {/if}
         {#if points.some((point) => point.investments !== null)}
           <TimeChart
-            {labels}
+            labels={[
+              ...labels,
+              ...(investmentForecast?.points
+                .slice(1)
+                .map((point) => `${monthLabel(point.month)} (projected)`) ?? []),
+            ]}
+            axisLabels={[
+              labels[0] ?? '',
+              investmentForecast
+                ? monthLabel(investmentForecast.points.at(-1)!.month)
+                : (labels.at(-1) ?? ''),
+            ]}
+            marker={points.length - 1}
             {currency}
             series={[
               {
@@ -349,12 +723,54 @@
                 label: 'Investments',
                 color: '#2b6cb0',
                 area: true,
-                values: points.map((point) => number(point.investments)),
+                values: [
+                  ...points.map((point) => number(point.investments)),
+                  ...(investmentForecast?.points.slice(1).map(() => null) ?? []),
+                ],
               },
+              ...(investmentForecast
+                ? [
+                    {
+                      key: 'projected-investments',
+                      label: 'Projected investments',
+                      color: '#8556a5',
+                      dashed: true,
+                      values: [
+                        ...points.slice(0, -1).map(() => null),
+                        ...investmentForecast.points.map((point) => Number(point.balance)),
+                      ],
+                    },
+                  ]
+                : []),
             ]}
             ariaLabel="Household investments by month"
             caption="Balances include contributions and withdrawals"
           />
+          {#if investmentForecast}
+            <details class="chart-data">
+              <summary>View projected investments</summary>
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <thead
+                    ><tr
+                      ><th scope="col">Month</th><th scope="col">Investments</th><th scope="col"
+                        >Contributions</th
+                      ><th scope="col">Growth</th></tr
+                    ></thead
+                  >
+                  <tbody
+                    >{#each investmentForecast.points.slice(1) as point}
+                      <tr
+                        ><th scope="row">{monthLabel(point.month)}</th><td
+                          >{money(point.balance)}</td
+                        ><td>{money(point.contributions)}</td><td>{money(point.gains)}</td></tr
+                      >
+                    {/each}</tbody
+                  >
+                </table>
+              </div>
+            </details>
+          {/if}
         {:else}<p class="muted">
             Add an investment account and record a balance to see its history.
           </p>{/if}

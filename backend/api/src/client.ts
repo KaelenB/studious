@@ -34,6 +34,8 @@ import {
   mortgageQuery,
   overviewQuery,
   overviewSchema,
+  investmentMarketQuery,
+  investmentMarketSchema,
   mortgageSchema,
   mortgageTermsBody,
   prepaymentBody,
@@ -232,6 +234,27 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       );
     },
     storage: (signal?: AbortSignal) => request('/storage', storageSchema, { signal }),
+    investmentMarket(
+      id: string,
+      asOf: string,
+      currency: string,
+      signal?: AbortSignal,
+      accountId?: string,
+    ) {
+      const query = investmentMarketQuery.parse({ asOf, currency, accountId });
+      return request(
+        `${pathFor(id)}/investment-market?${new URLSearchParams({ asOf: query.asOf, currency: query.currency, ...(query.accountId ? { accountId: query.accountId } : {}) })}`,
+        investmentMarketSchema,
+        { signal },
+      );
+    },
+    async downloadDatabase() {
+      const response = await responseFor('/database/backup');
+      if (response.headers.get('Content-Type')?.split(';')[0] !== 'application/vnd.sqlite3') {
+        throw new Error('The backend did not return a SQLite database.');
+      }
+      return response.blob();
+    },
     createHousehold: (name: string, defaultCurrency: string) =>
       request('/households', householdSchema, {
         method: 'POST',

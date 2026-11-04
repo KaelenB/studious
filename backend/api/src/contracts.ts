@@ -419,6 +419,37 @@ export const overviewSchema = z.object({
 export type OverviewInput = z.input<typeof overviewQuery>;
 export type Overview = z.infer<typeof overviewSchema>;
 
+export const investmentMarketQuery = z.strictObject({
+  asOf: calendarDate,
+  currency,
+  accountId: z.uuid().optional(),
+});
+export const investmentMarketSchema = z.object({
+  source: z.literal('Yahoo Finance (unofficial public API)'),
+  fetchedAt: z.iso.datetime(),
+  asOf: calendarDate,
+  currency,
+  annualReturn: z.number().finite().min(-100).max(100).nullable(),
+  coveragePercent: z.number().min(0).max(100),
+  holdings: z.array(
+    z.object({
+      accountId: z.uuid(),
+      name: z.string(),
+      symbol: z.string().nullable(),
+      statementDate: calendarDate.nullable(),
+      weightPercent: z.number().min(0).max(100),
+      marketName: z.string().nullable(),
+      price: z.number().finite().positive().nullable(),
+      priceCurrency: z.string().nullable(),
+      priceDate: calendarDate.nullable(),
+      historyStart: calendarDate.nullable(),
+      annualReturn: z.number().finite().nullable(),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+export type InvestmentMarket = z.infer<typeof investmentMarketSchema>;
+
 export const budgetFileLimit = 10 * 1024 * 1024;
 export const budgetUploadQuery = z.strictObject({
   filename: z

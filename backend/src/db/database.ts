@@ -49,6 +49,8 @@ export function createDatabase(driver: SqliteDriver) {
   return {
     db,
     driver,
+    snapshot: (destination: string) =>
+      exclusive(() => driver.query('VACUUM INTO ?', [destination], 'run')),
     async storage() {
       const [pageCount] = (await driver.query('PRAGMA page_count', [], 'get')) as [number[]];
       const [pageSize] = (await driver.query('PRAGMA page_size', [], 'get')) as [number[]];

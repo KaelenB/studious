@@ -23,6 +23,7 @@
   import { cents, formatMoney, localDateTime } from '../lib/money';
   import Mortgage from './Mortgage.svelte';
   import Statements from './Statements.svelte';
+  import AccountOverview from './AccountOverview.svelte';
   let {
     account,
     revision,
@@ -145,6 +146,7 @@
       <Button color="link" on:click={() => historyVersion++}>Retry history</Button>
     </Alert>{/if}
   {#if notice}<Alert color="success" fade={false}>{notice}</Alert>{/if}
+  <AccountOverview {account} revision={revision + historyVersion} />
   {#if account.type === 'MORTGAGE'}
     <Mortgage {account} disabled={busy} onrecord={recordProjected} />
   {/if}
@@ -186,7 +188,7 @@
       No balance snapshots yet. Record your first balance above.
     </p>
   {:else}
-    <Table responsive hover>
+    <Table responsive hover aria-label="Recorded balance snapshots">
       <thead><tr><th>Observed</th><th class="numeric">Balance</th><th>Source</th></tr></thead><tbody
       >
         {#each history as snapshot (snapshot.id)}<tr

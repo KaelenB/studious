@@ -10,6 +10,7 @@ export function buildApp(
   logger: boolean | { level: string } = true,
   corsOrigins: string[] = [],
   extractors: DocumentExtractors = nodeExtractors,
+  marketFetch: typeof fetch = fetch,
 ) {
   const app = Fastify({ logger, bodyLimit: 65536 });
   if (corsOrigins.length) {
@@ -22,5 +23,5 @@ export function buildApp(
       maxAge: 600,
     });
   }
-  return registerApi(app, connection, extractors);
+  return registerApi(app, connection, extractors, marketFetch);
 }

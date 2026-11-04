@@ -7,6 +7,16 @@ environment settings, or credentials.
 
 ## Use in this repository
 
+`api.investmentMarket(householdId, asOf, currency, signal?)` returns latest
+statement holdings with public historical stock/ETF prices, annualized adjusted
+returns, coverage and per-holding errors. It performs outbound ticker/date-only
+lookups when called; it is not a live valuation or a guaranteed projection.
+An optional fifth `accountId` argument scopes holdings and weights to one account.
+
+`api.downloadDatabase()` downloads a full-server SQLite backup as a `Blob`
+from `GET /database/backup`. It includes all households and private archived
+documents; store it securely. Concurrent downloads receive a retryable 503.
+
 Both backend and frontend depend on `@studious/api` at version `0.11.0`. npm
 workspaces link the package locally during `npm ci`; nothing is published or
 downloaded from a private registry.

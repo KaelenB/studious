@@ -37,6 +37,25 @@
   let loading = $state(true);
   let error = $state('');
   let storageWarning = $state('');
+  let backupBusy = $state(false);
+  let backupError = $state('');
+  async function downloadDatabase() {
+    backupBusy = true;
+    backupError = '';
+    try {
+      const blob = await api.downloadDatabase();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `studious-${new Date().toISOString().slice(0, 10)}.sqlite`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) {
+      backupError = errorMessage(cause);
+    } finally {
+      backupBusy = false;
+    }
+  }
   let memberName = $state('');
   let memberBusy = $state(false);
   let mutationBusy = $state(false);
@@ -472,6 +491,18 @@
           </Form>
           {#if memberError}<Alert color="danger" fade={false}>{memberError}</Alert>{/if}
           <StorageMeter {revision} />
+          <div class="mt-3">
+            <Button color="primary" outline disabled={backupBusy} on:click={downloadDatabase}>
+              {backupBusy ? 'Preparing database...' : 'Download SQLite database'}
+            </Button>
+            <p class="muted small mt-2 mb-0">
+              Full server backup: includes every household, archived records and private statement
+              documents, not just this household. Store it securely. The live database is unchanged.
+            </p>
+            {#if backupError}<Alert color="danger" class="mt-2" fade={false}
+                >Database download failed. {backupError}</Alert
+              >{/if}
+          </div>
         </Card>
         <footer>
           Built for a little more peace of mind. <span

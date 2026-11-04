@@ -30,6 +30,8 @@ import { createBudgetRepository } from './repositories/budget.js';
 import { createBudgetService } from './services/budget.js';
 import { createBudgetController } from './controllers/budget.js';
 import { registerBudgetRoutes } from './routes/budget.js';
+import { registerBackupRoutes } from './routes/backup.js';
+import { registerMarketRoutes } from './routes/market.js';
 
 /**
  * Registers every API route on a Fastify-compatible router. It is platform neutral so the same
@@ -39,10 +41,13 @@ export function registerApi(
   app: FastifyInstance,
   connection: DatabaseConnection,
   extractors: DocumentExtractors,
+  marketFetch: typeof fetch = fetch,
 ) {
   const { db } = connection;
   const service = createFinanceService(createFinanceRepository(db), connection.storage);
   registerErrorHandler(app);
+  registerBackupRoutes(app, connection);
+  registerMarketRoutes(app, db, service, marketFetch);
   registerFinanceRoutes(app, createFinanceController(service), service);
   registerStatementRoutes(
     app,

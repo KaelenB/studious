@@ -289,8 +289,8 @@
         {/if}
         <div
           class="chart-tooltip"
-          class:flip={fraction(shown) > 0.55}
           style:left={`${fraction(shown) * 100}%`}
+          style:--tooltip-offset={`${-fraction(shown) * 100}%`}
         >
           <strong>{labels[shown]}</strong>
           {#each stacked ? [...visible].reverse() : visible as item (item.key)}

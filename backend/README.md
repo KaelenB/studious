@@ -67,6 +67,16 @@ docker compose exec api rm /app/backend/data/backup.sqlite
 Backups contain private financial documents: store them encrypted and never
 commit them (`*.sqlite` and `backend/data/` are git-ignored).
 
+The Household section's **Download SQLite database** button downloads
+`GET /database/backup` as a standalone `.sqlite` file. The API runs `VACUUM INTO`
+under its connection lock, including committed WAL data, then streams a temporary
+snapshot and deletes it when the stream closes. One backup/download is allowed
+at a time (others receive 503 and can retry). Allow temporary disk space up to
+the database size. Snapshot creation queues writes; downloading does not.
+The response is not cacheable. This is a **full server backup of every household**,
+including archives and original statement documents, not a household-only export.
+The endpoint has the same local-only/no-authentication restriction as the API.
+
 The published port binds to loopback. There is deliberately **no authentication
 yet**, following the v1 proposal. Household IDs scope queries and database
 relationships but do not authorize callers. Do not expose this service publicly
@@ -259,6 +269,37 @@ Category names are trimmed and unique within each household (case-sensitive).
 Cross-household member/category references are rejected by composite foreign
 keys. Category rename/delete, recurrence rules, payment status, and tags are not
 implemented. Recording or archiving an expense does not change account balances.
+
+### Public investment market history
+
+`GET /households/{householdId}/investment-market?asOf=YYYY-MM-DD&currency=CAD`
+reads the latest statement (on or before the selected date) per active investment
+account. Optional `accountId` scopes both holdings and portfolio weights to one
+active investment account in that household/currency; foreign IDs return 404.
+Only an explicit UI action fetches external data. Yahoo Finance's
+unofficial public chart API supplies up to five years of daily adjusted closes
+for explicit stock/ETF tickers; at least three years are required. No API key
+is needed, but availability and rate limits are not guaranteed. Server egress
+to `query1.finance.yahoo.com` is required. Only symbols and dates are sent;
+documents, names, balances and household IDs are never sent to the provider.
+
+CAD symbols without a recognized Canadian exchange suffix are tried as `.TO`;
+USD symbols are unchanged. Currency,
+returned ticker and ETF/equity classification must match. Verify returned names:
+an exchange cannot always be inferred from statement symbols. Untickered plan
+funds are not guessed. Prices are historical daily closes, not live valuations.
+The current UTC day's incomplete trading session is excluded.
+Adjusted-price CAGR is historical performance, not a forecast or guaranteed return.
+Responses show dates, per-holding failures and portfolio coverage.
+
+Historical statement proportions scale to the latest recorded account balances.
+Only same-currency positions are used; cash, missing data and cross-currency
+holdings contribute zero growth to the full-portfolio weighted assumption.
+No FX return is fabricated. This can understate or overstate future performance.
+Up to 20 lookups per request, eight-second provider timeouts, six-hour in-memory
+history cache (maximum 200 entries), and one request at a time bound external
+work. Failures are logged and surfaced per holding; unusable estimates are not
+silently applied. The manual scenario remains available. No database changes.
 
 ### Historical budgets and dated income
 

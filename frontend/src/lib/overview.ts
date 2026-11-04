@@ -123,3 +123,114 @@ export function netChange(
     percent: previous.net > 0n ? (Number(amount) / Number(previous.net)) * 100 : null,
   };
 }
+
+/** A cash-flow scenario, not an extrapolation of investment returns or carried balances. */
+export function netWorthProjection(
+  overview: Overview,
+  accounts: Account[],
+  currency: string,
+  horizon: number,
+  monthlyChange?: bigint,
+) {
+  const trends = householdTrends(overview, accounts, [], [], currency);
+  const latest = trends.points.at(-1);
+  if (!latest || latest.net === null) return null;
+  const candidates = trends.cashflow.slice(-13, -1);
+  const samples = candidates.filter(
+    (point) =>
+      overview.income.some((entry) => entry.currency === currency && entry.month === point.month) &&
+      overview.expenses.some((entry) => entry.currency === currency && entry.month === point.month),
+  );
+  const total = samples.reduce((sum, point) => sum + point.net, 0n);
+  const automatic = samples.length >= 3;
+  const change = monthlyChange ?? (automatic ? total / BigInt(samples.length) : 0n);
+  const [year, month] = latest.month.split('-').map(Number);
+  const months = Math.min(horizon, (9999 - year!) * 12 + 12 - month!);
+  return {
+    monthlyChange: change,
+    missingAccounts: latest.missing,
+    sampleMonths: samples.map((point) => point.month),
+    basis: monthlyChange !== undefined ? 'manual' : automatic ? 'cashflow' : 'flat',
+    points: Array.from({ length: months + 1 }, (_, index) => {
+      const date = new Date(Date.UTC(year!, month! - 1 + index, 1));
+      return { month: date.toISOString().slice(0, 7), net: latest.net! + change * BigInt(index) };
+    }),
+  };
+}
+
+export function investmentProjection(
+  overview: Overview,
+  accounts: Account[],
+  currency: string,
+  horizon: number,
+  annualReturn: number,
+  monthlyContribution: bigint,
+) {
+  if (
+    !Number.isFinite(annualReturn) ||
+    annualReturn < -100 ||
+    annualReturn > 100 ||
+    !Number.isInteger(horizon) ||
+    horizon < 0 ||
+    horizon > 60 ||
+    monthlyContribution < 0n
+  )
+    throw new Error('Invalid investment projection assumptions');
+  const selected = accounts.filter(
+    (account) => account.currency === currency && account.type === 'INVESTMENT',
+  );
+  const index = overview.months.length - 1;
+  if (!selected.length || index < 0) return null;
+  let starting = 0n;
+  for (const account of selected) {
+    const balance = overview.accounts.find((entry) => entry.accountId === account.id)?.balances[
+      index
+    ];
+    if (balance == null || cents(balance) < 0n) return null;
+    starting += cents(balance);
+  }
+
+  const [year, month] = overview.months[index]!.split('-').map(Number);
+  const months = Math.min(horizon, (9999 - year!) * 12 + 12 - month!);
+  // Convert the effective annual assumption to a fixed-point monthly factor.
+  const precision = 1_000_000_000_000n;
+  const factor = BigInt(Math.round((1 + annualReturn / 100) ** (1 / 12) * Number(precision)));
+  let accrued = starting * precision;
+  return {
+    points: Array.from({ length: months + 1 }, (_, step) => {
+      if (step)
+        accrued = (accrued * factor + precision / 2n) / precision + monthlyContribution * precision;
+      const balance = (accrued + precision / 2n) / precision;
+      return {
+        month: new Date(Date.UTC(year!, month! - 1 + step, 1)).toISOString().slice(0, 7),
+        balance,
+        contributions: monthlyContribution * BigInt(step),
+        gains: balance - starting - monthlyContribution * BigInt(step),
+      };
+    }),
+  };
+}
+
+export function accountProjection(
+  overview: Overview,
+  account: Account,
+  horizon: number,
+  monthlyChange: bigint,
+) {
+  const starting = overview.accounts
+    .find((entry) => entry.accountId === account.id)
+    ?.balances.at(-1);
+  const month = overview.months.at(-1);
+  if (starting == null || !month) return null;
+  const [year, number] = month.split('-').map(Number);
+  const count = Math.min(horizon, (9999 - year!) * 12 + 12 - number!);
+  const balance = cents(starting);
+  return Array.from({ length: count + 1 }, (_, step) => {
+    const projected = balance + monthlyChange * BigInt(step);
+    return {
+      month: new Date(Date.UTC(year!, number! - 1 + step, 1)).toISOString().slice(0, 7),
+      balance:
+        isDebt(account) && balance >= 0n && monthlyChange < 0n && projected < 0n ? 0n : projected,
+    };
+  });
+}

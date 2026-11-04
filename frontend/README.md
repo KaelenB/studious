@@ -29,6 +29,36 @@ filesystem router are not needed yet.
   through-date and a currency.
 - Read point values with hover, tap or arrow keys; toggle chart series and open
   the monthly net-worth table. Mortgage and overview timelines use `TimeChart`.
+  Charts and tooltips fit their card widths; donut legends stack beneath the
+  ring in narrow cards and wrap long category names without horizontal overflow.
+- Project household net worth 12/24/36/60 months ahead with a dashed scenario
+  and a projected-values table. Automatic monthly change averages recorded
+  surplus from completed months with both income and expenses in the trailing
+  year (at least three required); otherwise it shows a labeled flat scenario.
+  Custom signed monthly changes are supported. Missing account balances do not
+  block the forecast: known balances are projected with an explicit partial-net-worth
+  warning; missing assets and debts remain excluded, not zero. At least one known
+  balance is required. Forecasts exclude inflation and separate mortgage amortization;
+  incomplete records and transfers can distort surplus.
+- Investment forecasts share the net-worth horizon and use an editable effective
+  annual growth assumption (illustrative 5% default, not an inferred or guaranteed
+  return) compounded monthly, plus month-end contributions (default zero).
+  Projected gains also increase projected net worth; contributions are transfers
+  from household cash and do not themselves increase net worth. Set growth to zero
+  if a custom net-worth change already includes returns. Every investment account
+  in the selected currency needs a non-negative balance. Tables separate future
+  contributions from growth; fees, taxes and inflation are excluded. Scenario
+  inputs are temporary and reset on reload.
+- **Load market-based projection** explicitly fetches Yahoo Finance public history
+  for tickers in the latest imported statements. The holdings table shows returned
+  security names, last daily close, price/history dates, historical CAGR, statement
+  weights, coverage and failures. Check ticker identities, especially CAD `.TO`
+  defaults. Weighted historical returns replace the manual growth assumption for
+  both charts; **Apply investment assumptions** switches back to manual.
+  Cash, unmatched funds and foreign-currency positions contribute zero growth
+  in the weighted portfolio, without inventing FX returns. Historical performance
+  does not predict future returns. Lookup data resets on household/date/currency
+  changes and refreshes; no outbound market requests occur until clicked.
 - Compare month-to-date, year-to-date and 12-month recorded net-worth changes.
   Month-end balances carry forward; missing observations stay unknown. Growth
   is unavailable when the observed account set changes. Deposits, withdrawals
@@ -39,6 +69,9 @@ filesystem router are not needed yet.
 - Create expense categories and record one-off expenses with optional category/member.
 - Edit or archive expenses, filter by calendar month, and page through 20 rows at a time.
 - View exact monthly spending totals by currency across all pages.
+- Download a consistent full-server SQLite backup from **Household → Download
+  SQLite database**. Includes all households and archived statement documents;
+  keep the file private. The live database is unchanged.
 - Record, edit and archive historical income by month/member, with exact
   per-currency totals. View combined household monthly income, expenses net of
   refunds, recorded surplus and a cash-flow table on the overview.
@@ -128,6 +161,17 @@ e2e/                            # Real in-memory SQLite + API browser tests
 ```
 
 ## UI components
+
+Selecting an account opens **Account overview** above its balance-entry form.
+It shows that account's 6/12/24/36-month balance history, monthly and annual
+net-worth impact, and a 12/24/36/60-month dashed scenario. Date/range controls
+do not change saved records. Recording/importing balances refreshes the overview.
+Investment accounts use monthly compounding and contributions or explicitly
+requested account-scoped public market history. Other accounts use a signed
+monthly balance change (negative repays debt, capped at zero). Mortgage
+amortization remains in the detailed mortgage schedule; the overview's generic
+scenario does not infer payments or interest. Missing history stays unknown,
+and forecasts never include other accounts or household income/expenses.
 
 Use components from `@sveltestrap/sveltestrap` for buttons, forms, inputs,
 labels, cards, alerts, badges, loading spinners, tables, and Bootstrap grid rows
