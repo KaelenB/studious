@@ -1,0 +1,45 @@
+{
+  "name": "@studious/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22"
+  },
+  "scripts": {
+    "predev": "npm run build --workspace @studious/api",
+    "dev": "tsx watch src/server.ts",
+    "prebuild": "npm run build --workspace @studious/api",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "pretypecheck": "npm run build --workspace @studious/api",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build --workspace @studious/api",
+    "test": "vitest run --exclude \"api/**\"",
+    "predb:generate": "npm run build --workspace @studious/api",
+    "db:generate": "drizzle-kit generate",
+    "predb:migrate": "npm run build --workspace @studious/api",
+    "db:migrate": "tsx src/db/migrate.ts"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "12.2.1",
+    "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11",
+    "fflate": "0.8.3",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.4.0",
+    "@studious/api": "0.5.0",
+    "dotenv": "18.0.9",
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.8",
+    "pdf-parse": "2.4.5",
+    "pg": "8.23.1",
+    "read-excel-file": "9.3.14",
+    "zod": "4.6.7"
+  }
+}

@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+.playwright-mcp
+.git
+docs/sunlife
+docs/questrade
+**/.env
+**/.env.*
+!**/.env.example

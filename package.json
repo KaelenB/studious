@@ -1,0 +1,27 @@
+{
+  "name": "studious",
+  "private": true,
+  "engines": {
+    "node": ">=22.22"
+  },
+  "workspaces": [
+    "backend/api",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build:api": "npm run build --workspace @studious/api",
+    "dev:backend": "npm run dev --workspace @studious/backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces",
+    "test:e2e": "npm run test:e2e --workspace frontend",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "prettier-plugin-svelte": "4.1.1"
+  }
+}
