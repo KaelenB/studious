@@ -213,7 +213,7 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <div class="app-shell">
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="Studious home"
+    <a class="brand" href={import.meta.env.BASE_URL} aria-label="Studious home"
       ><span class="brand-mark" aria-hidden="true">s.</span>studious<span class="brand-dot">.</span
       ></a
     >
